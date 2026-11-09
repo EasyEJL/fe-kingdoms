@@ -1,0 +1,12 @@
+{
+  "fe_version": "26.5.0",
+  "fe_commit": "3dab95f",
+  "compiler_url": "https://github.com/argotorg/fe/releases/download/v26.5.0/fe_linux_amd64",
+  "compiler_sha256": "3732fbe8a6e9d2ea3925d02d0e3a1478bc1e01d742c2be75d3ea7300c46c45f0",
+  "measured_image_id": "sha256:32e644f1599ac63427a9e545d643ad75adee6f14328c4b7d1be01e3bf728391d",
+  "rust_version": "1.94.0",
+  "rust_base_digest": "sha256:cf09adf8c3ebaba10779e5c23ff7fe4df4cccdab8a91f199b0c142c53fef3e1a",
+  "python_version": "3.13.5",
+  "gcc_version": "14.2.0-19",
+  "network_during_verification": "none"
+}

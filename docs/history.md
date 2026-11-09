@@ -1,0 +1,11 @@
+# Development history
+
+This is a reconstructed summary, first written on 2026-11-09 from the current code, test evidence and project conversation. It is not a complete pre-Git history and does not imply earlier commits existed.
+
+1. The project pivoted from a differential-testing investigation to a standalone playable strategy game. The earlier transition prototype and Dragonstales work were preserved separately.
+2. A native Fe engine, bounded headless protocol, thin Python adapter and simple browser board were implemented. The initial priority was a complete interaction and match, not terminal polish or framework work.
+3. Automated self-play exposed passive play and expensive ordering work. Advancement evaluation and cached action ordering were improved. The retained test suite then produced decisive complete matches and exact replays.
+4. Eric's first playtest found the turn structure confusing and Easy punishing. The browser was revised to show each human order, pause before Red, explain the kingdom-wide budget and display Fe-backed forecasts. The underlying two-order rule and AI algorithms were kept unchanged for the next playtest.
+5. The user requested local Git and documentation. The initial commit captures the existing implementation and starts normal project history from this point. No remote or publication is configured.
+
+Future entries should cite actual commits, tests and playtest findings. Do not reconstruct exact dates, authorship or intermediate changes without evidence.

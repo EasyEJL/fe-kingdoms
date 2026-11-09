@@ -1,0 +1,191 @@
+use std::io::{Read, Write, host, read_char, write_char}
+
+struct Input { look: i32, started: bool, ok: bool, bytes: u32 }
+fn advance() uses (input: mut Input, reader: mut Read) {
+    input.look = read_char()
+    if input.look != -1 {
+        input.bytes += 1
+    }
+    if input.bytes > 16384 {
+        input.ok = false
+        input.look = -1
+    }
+}
+fn whitespace(_ c: i32) -> bool {
+    c == 32 || c == 9 || c == 10 || c == 13
+}
+// Bounded parser: rejects sign, overflow, non-digits, too many fields and >8KiB.
+fn number() -> u64 uses (input: mut Input, reader: mut Read) {
+    if !input.started {
+        advance()
+        input.started = true
+    }
+    while whitespace(input.look) {
+        advance()
+    }
+    if input.look < 48 || input.look > 57 {
+        input.ok = false
+        return 0
+    }
+    var n: u64 = 0
+    while input.look >= 48 && input.look <= 57 {
+        if n > 429496729 || (n == 429496729 && input.look > 53) {
+            input.ok = false
+            return 0
+        }
+        let digit: u64 = (input.look - 48).downcast_unchecked()
+        n = n * 10 + digit
+        advance()
+    }
+    if input.look != -1 && !whitespace(input.look) {
+        input.ok = false
+    }
+    n
+}
+fn input_done() -> bool uses (input: mut Input, reader: mut Read) {
+    while whitespace(input.look) {
+        advance()
+    }
+    input.ok && input.look == -1
+}
+fn out(_ n: i64) uses (writer: mut Write) {
+    if n < 0 {
+        write_char(45)
+        out(-n)
+    } else {
+        if n >= 10 { out(n / 10) }
+        let c: i32 = (n % 10 + 48).downcast_unchecked()
+        write_char(c)
+    }
+}
+fn field(_ n: i64) uses (writer: mut Write) {
+    write_char(32)
+    out(n)
+}
+fn small(_ n: usize) -> i64 {
+    n.downcast_unchecked()
+}
+
+fn emit_action(_ tag:i64,_ a:Action) uses(writer:mut Write) {
+    out(tag)
+ field(a.kind)
+ field(small(a.from))
+ field(small(a.to))
+ field(a.amount)
+ write_char(10)
+}
+fn run() -> i32 uses(input:mut Input,reader:mut Read,writer:mut Write) {
+    let version = number()
+    let mode = number()
+    let difficulty = number()
+    let count = number()
+    if !input.ok || version != 1 || mode > 3 || difficulty > 1 || count > 240 { return 2 }
+    var trace = [pass();240]
+    var length:usize = count.downcast_unchecked()
+    var s = initial()
+    for i in 0 .. length {
+        let kind = number()
+ let from = number()
+ let to = number()
+ let amount = number()
+        if !input.ok || kind > 3 || from > 14 || to > 14 || amount > 12 { return 2 }
+        let a = Action {kind:kind.downcast_unchecked(),from:from.downcast_unchecked(),to:to.downcast_unchecked(),amount:amount.downcast_unchecked()}
+        if !is_legal(s,a) { return 2 }
+        s = apply(s,a)
+        trace[i] = a
+    }
+    if !input_done() { return 2 }
+    var stats = Search {nodes:0}
+    if mode != 1 {
+        while s.result == 0 && (s.side == 2 || mode >= 2) {
+            if length >= 240 { return 2 }
+            let a = with (Search = stats) {choose(s,difficulty.downcast_unchecked())}
+            assert(is_legal(s,a))
+            s = apply(s,a)
+            trace[length] = a
+            length += 1
+            if mode == 3 { break }
+        }
+    }
+    out(0)
+ field(1)
+ field(difficulty.downcast_unchecked())
+ field(small(length))
+ write_char(10)
+    var last = pass()
+    if length > 0 { last = trace[length-1] }
+    out(1)
+ field(s.side)
+ field(s.orders)
+ field(s.turn)
+ field(s.result)
+ field(s.gold[1])
+ field(s.gold[2])
+ field(s.passes)
+    field(last.kind)
+ field(small(last.from))
+ field(small(last.to))
+ field(last.amount)
+    field(stats.nodes)
+ field(if difficulty==0 {1} else {4})
+ write_char(10)
+    let blue = supply(s,1)
+    let red = supply(s,2)
+    for i in 0 .. 15 {
+        let supplied = (s.owner[i]==1 && blue[i]) || (s.owner[i]==2 && red[i])
+        out(2)
+ field(small(i))
+ field(s.owner[i])
+ field(s.troops[i])
+ field(s.fort[i])
+ field(if supplied {1} else {0})
+ field(terrain(i))
+ write_char(10)
+    }
+    let choices = legal(s)
+    for i in 0 .. choices.len { emit_action(3,choices.items[i]) }
+    // Preview each exact legal action with the same authoritative transition.
+    // These are observations, never a second combat/economy implementation.
+    let player:usize = s.side.downcast_unchecked()
+    for i in 0 .. choices.len {
+        let a=choices.items[i]
+        let after=apply(s,a)
+        var outcome:i64=0
+        if a.kind==2 { outcome=4 }
+        else if a.kind==3 { outcome=5 }
+        else if a.kind==1 {
+            if s.owner[a.to]==s.side { outcome=1 }
+            else if after.owner[a.to]==s.side { outcome=2 }
+            else { outcome=3 }
+        }
+        out(5)
+        field(small(i))
+        field(outcome)
+        field(s.gold[player]-after.gold[player])
+        field(after.troops[a.from])
+        field(after.troops[a.to])
+        field(after.owner[a.to])
+        field(after.side)
+        field(after.orders)
+        field(after.result)
+        field(if a.kind==1 && s.owner[a.to]!=s.side {defense(s,a.to)} else {0})
+        write_char(10)
+    }
+    for i in 0 .. length {
+        out(4)
+ field(small(i))
+ field(trace[i].kind)
+ field(small(trace[i].from))
+ field(small(trace[i].to))
+ field(trace[i].amount)
+ write_char(10)
+    }
+    0
+}
+pub fn main() -> i32 {
+    var input = Input {look:-1,started:false,ok:true,bytes:0}
+    var reader = host()
+    var writer = host()
+    let code = with(Input=input,Read=reader,Write=writer) {run()}
+    if writer.failed() {3} else {code}
+}

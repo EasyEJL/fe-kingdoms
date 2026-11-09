@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fe Kingdoms</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#202b35;background:#eef1f2}body{max-width:1050px;margin:24px auto;padding:0 16px}h1{margin-bottom:4px}p{line-height:1.5}button,select{font:inherit;padding:8px 12px;border:1px solid #8b969e;border-radius:5px;background:white;color:inherit;cursor:pointer}button:disabled,select:disabled{cursor:wait;opacity:.5}button:hover:not(:disabled){background:#eef6fd}header p{margin-top:0;color:#58636a}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:18px 0}.layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(250px,1fr);gap:20px}.board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}.tile{min-height:122px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:2px solid #a6adb3;background:#f7f5ee}.tile.blue{background:#dfedff;border-color:#3976b9}.tile.red{background:#ffe4df;border-color:#b44c40}.tile.selected{outline:3px solid #202b35;outline-offset:1px}.tile strong{font-size:1.4rem}.tile small{font-size:.75rem}.tile .place{font-weight:700}.tile.unsupplied{border-style:dashed}.panel{background:white;border:1px solid #d1d8dd;border-radius:6px;padding:16px}.panel h2{font-size:1.1rem;margin:0 0 12px}.actions{display:flex;flex-direction:column;gap:7px;max-height:350px;overflow:auto}.actions button{text-align:left}.forecast{display:block;font-size:.8rem;margin-top:5px}.risky{border-color:#a22518!important}.risky .forecast{color:#a22518}.computer-turn{font-weight:bold;background:#ffe4df}.tile.recent{box-shadow:inset 0 0 0 3px #d19520}#turn-guide{font-weight:600;margin:8px 0}.status{padding:12px 0;font-weight:600;min-height:44px}.error{color:#a22518;font-weight:600;min-height:24px}.muted{font-size:.85rem;color:#58636a}.legend{font-size:.85rem;margin:12px 0}.blue-text{color:#205a99}.red-text{color:#a3372d}details{margin:20px 0}summary{cursor:pointer;font-weight:600}li{margin:8px 0}#log{font-size:.85rem;line-height:1.6;max-height:150px;overflow:auto}#notice{font-weight:600}.file{display:none}@media(max-width:750px){.layout{grid-template-columns:1fr}.tile{min-height:105px}.tile small{font-size:.65rem}.actions{max-height:240px}}
+</style>
+<header><h1>Fe Kingdoms</h1><p>Two kingdoms. One map. A native Fe opponent.</p></header>
+<div class="toolbar">
+<label for="difficulty">Computer</label><select id="difficulty"><option value="0">Easy</option><option value="1">Hard</option></select>
+<button id="new">New game</button><button id="save" disabled>Save replay</button><button id="load">Load replay</button><button id="resume">Resume saved game</button>
+<input class="file" id="file" type="file" accept=".json,application/json">
+</div>
+<div id="notice" role="status" aria-live="polite"></div>
+<div id="human-activity" class="muted" aria-live="polite"></div><div id="activity" class="muted" aria-live="polite"></div>
+<div id="error" class="error" role="alert"></div>
+<div id="status" class="status" aria-live="polite"></div>
+<div class="panel" style="margin-bottom:16px"><strong>Capture Red's capital E3. Keep your capital A1 safe.</strong><p id="turn-guide" aria-live="polite"></p><p id="opening-hint" class="muted"></p><small>TWO orders total across your whole kingdom, not per territory. Selecting tiles is free. You can use the same territory twice. Spend your orders, then press Run computer turn.</small></div><div class="layout">
+<section><div id="board" class="board" aria-label="Kingdom map"></div><p class="legend"><span class="blue-text">Blue: you</span> · <span class="red-text">Red: computer</span> · Cream: neutral<br>Dashed borders mark territory cut off from its capital. Numbers are troops.</p><div id="search" class="muted"></div></section>
+<aside class="panel"><h2 id="action-title">Orders</h2><p id="selection-help" class="muted">Select a blue territory to see its orders.</p><button id="all">Show all orders</button><div id="actions" class="actions" style="margin-top:12px"></div></aside>
+</div>
+<details><summary>Full rules and strategy basics</summary><ul>
+<li>You command Blue. Each side takes two orders per turn. Select a territory, then choose an order supplied by Fe. These are two orders TOTAL across your kingdom, not per territory. Selecting tiles is free. End my turn forfeits your remaining orders. After your second order or End my turn, press Run computer turn to let Red act.</li>
+<li>Move either half your troops (rounded down) or all but one to an orthogonally adjacent territory. Friendly territories combine troops, up to 12. Every territory retains at least one troop.</li>
+<li>Recruit 2 troops for 3 gold, or add 1 fort level for 2 gold (maximum fort level 2). Both require a supplied territory you own.</li>
+<li>Defense is troops + fort level + 1 on hills. An attack must exceed defense to conquer; survivors equal attackers minus defense, and captured forts are removed. Otherwise all attackers are lost, while defenders lose max(1, attackers - fort level - hill bonus), with at least one defender surviving.</li>
+<li>Supply follows a connected path of your territories to your capital. At the start of your turn, gain 2 gold plus 1 for each supplied farm or town, up to 30 gold. Each cut-off territory loses 1 troop, to a minimum of 1.</li>
+<li>Capture the enemy capital to win immediately. Four consecutive end-turn orders, or completing 120 side turns, ends the match in a draw. Any non-pass order resets the consecutive-pass count.</li>
+<li>Easy uses greedy one-ply evaluation. Hard uses four-ply beam alpha-beta search. Both use identical rules and resources, with no hidden bonuses. Select difficulty before a new game.</li>
+<li>Save replay downloads the full deterministic move record. Load replay validates it with Fe. A local checkpoint is saved only after a successful response. Export a replay before replacing a game if you want to keep it.</li>
+</ul></details>
+<details><summary>Recent orders</summary><div id="log"></div></details>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const terrain=['Plain','Farm','Town','Hill','Capital'];
+const names=['Neutral','Blue','Red'];
+let game=null, selected=null, busy=false;
+const place=i=>String.fromCharCode(65+i%5)+(Math.floor(i/5)+1);
+const actionName=a=>a[0]===0?'End turn':a[0]===1?'Move '+a[3]+' troops: '+place(a[1])+' -> '+place(a[2]):a[0]===2?'Recruit +2 troops at '+place(a[1]):a[0]===3?'Fortify '+place(a[1]):'Unknown order';
+function forecast(a,p,done=false){
+ if(!p)return 'Fe will validate this order.';
+ if(p.result===3)return done?'Match ended in a draw. No further turns.':'Ends the match in a draw. No further turns.';
+ if(p.result===1)return done?'You captured Red capital E3 and won the match.':'Captures Red capital E3 and wins the match immediately.';
+ if(p.result===2)return done?'Red won the match.':'Ends the match with a Red victory.';
+ if(p.outcome===0)return 'Unused orders are forfeited. Red plays next.';
+ if(p.outcome===1)return (done?'Moved':'Would move')+' to '+place(a[2])+': '+p.targetTroops+' troops there, '+p.sourceTroops+' left at '+place(a[1])+'.';
+ if(p.outcome===2)return (done?'Captured':'Would capture')+' '+place(a[2])+' with '+p.targetTroops+' survivors. Defense '+p.defense+'; '+p.sourceTroops+' left behind.';
+ if(p.outcome===3)return 'Attack '+(done?'failed':'will fail')+': all '+a[3]+' attackers lost. '+p.targetTroops+' defenders remain (defense '+p.defense+').';
+ if(p.outcome===4)return p.cost+' gold. '+(done?'Now':'Would have')+' '+p.targetTroops+' troops at '+place(a[1])+'.';
+ if(p.outcome===5)return p.cost+' gold. '+(done?'Added':'Adds')+' 1 fort level to this territory.';
+ return '';
+}
+function checkpoint(){try{localStorage.setItem('fe-kingdoms-v1',JSON.stringify(replay()));}catch{}}
+function replay(){return {version:1,difficulty:game.difficulty,actions:game.actions};}
+function setBusy(value){busy=value;document.querySelectorAll('button,select').forEach(el=>el.disabled=value);$('save').disabled=value||!game;}
+function render(){
+ if(!game)return;
+ const s=game.state;
+ $('difficulty').value=String(game.difficulty);
+ const ending=['','You win: Red capital E3 has fallen.','Red wins: your capital A1 has fallen.','Draw: neither kingdom won.'];
+ const turn=s.side===1?'Your turn: '+s.orders+' of 2 orders remaining':'Red turn: waiting for Run computer turn';
+ $('status').textContent=(s.result?ending[s.result]:turn)+' | Round '+Math.ceil(s.turn/2)+' | Gold: you '+s.gold1+', Red '+s.gold2;
+ $('turn-guide').textContent=s.result?'Match complete. Save the replay or start again.':s.side===2?'Your turn is finished. Review the board, then press Run computer turn. Red now gets up to two orders.':s.orders===1?'1 order remains across your WHOLE kingdom. Red has not moved. Use another order, or end your turn early.':'You have TWO orders TOTAL across your whole kingdom. You can use the same territory twice. Selecting a tile costs no order.';
+ $('opening-hint').textContent=game.actions.length===0?'Opening example: select A2 (free), recruit +2 troops for 3 gold (order 1), then send 2 troops from A2 to the neutral town B2 (order 2). Those are your TWO orders.':'';
+ $('board').replaceChildren();
+ const last=game.actions[game.actions.length-1];
+ for(const t of game.tiles){
+  const b=document.createElement('button');b.className='tile '+(t.owner===1?'blue':t.owner===2?'red':'')+(t.index===selected?' selected':'')+(!t.supplied&&t.owner?' unsupplied':'')+(last&&last[0]!==0&&(last[1]===t.index||last[2]===t.index)?' recent':'');
+  b.setAttribute('aria-pressed',String(t.index===selected));b.setAttribute('aria-label',place(t.index)+', '+terrain[t.terrain]+', '+names[t.owner]+', '+t.troops+' troops, fort '+t.fort+', '+(t.supplied?'supplied':'not supplied'));
+  for(const [tag,text,cls] of [['span',place(t.index),'place'],['small',terrain[t.terrain],''],['strong',String(t.troops),''],['small',names[t.owner]+' | Fort '+t.fort,''],['small',t.owner?(t.supplied?'Supplied':'Cut off'):'Unclaimed','']]){const e=document.createElement(tag);e.textContent=text;e.className=cls;b.append(e);}
+  b.onclick=()=>{if(busy)return;selected=selected===t.index?null:t.index;render();};$('board').append(b);
+ }
+ const tile=game.tiles.find(t=>t.index===selected);
+ $('action-title').textContent=selected===null?'All available orders':place(selected)+': '+(tile?names[tile.owner]:'territory');
+ $('selection-help').textContent=!tile?'Select a blue territory, or choose from all orders below.':tile.owner!==1?place(tile.index)+' belongs to '+names[tile.owner]+'. Select a neighboring blue territory to move or attack here.':place(tile.index)+': '+tile.troops+' troops, fort '+tile.fort+'. '+(tile.supplied?'Supplied: recruit or fortify if affordable.':'Cut off: reconnect to A1 to recruit or fortify.')+' Moving leaves at least one troop behind.';
+ $('actions').replaceChildren();
+ if(s.result){const p=document.createElement('p');p.textContent='Match complete. Start again or save this replay.';$('actions').append(p);}
+ else if(s.side!==1){const b=document.createElement('button');b.className='computer-turn';b.textContent='Run computer turn';b.onclick=()=>request({mode:0,difficulty:game.difficulty,actions:game.actions});$('actions').append(b);}
+ else {
+  game.legal.forEach((a,index)=>{
+   if(selected!==null&&a[0]!==0&&a[1]!==selected)return;
+   const p=game.previews&&game.previews[index];
+   const b=document.createElement('button');b.className=p&&p.outcome===3?'risky':'';
+   const title=document.createElement('span');title.textContent=a[0]===0?'End my turn (skip '+s.orders+' remaining '+(s.orders===1?'order':'orders')+')':actionName(a)+' | 1 order';b.append(title);
+   const detail=document.createElement('small');detail.className='forecast';detail.textContent=forecast(a,p);b.append(detail);
+   b.onclick=()=>perform(a,p);$('actions').append(b);
+  });
+ }
+ $('search').textContent='Native Fe | '+(game.difficulty?'Hard':'Easy')+' | Last search: '+s.nodes+' nodes, depth '+s.depth+' | '+game.actions.length+' recorded orders. Gold outlines mark the last order.';
+ $('log').replaceChildren();game.actions.slice(-16).forEach((a,i)=>{const div=document.createElement('div');div.textContent=(Math.max(0,game.actions.length-16)+i+1)+'. '+actionName(a);$('log').append(div);});
+ setBusy(busy);
+}
+function perform(a,p){
+ if(busy||!game||game.state.side!==1||game.state.result)return Promise.resolve(false);
+ if(a[0]===0&&!confirm('End your turn now and give up '+game.state.orders+' remaining '+(game.state.orders===1?'order':'orders')+'?'))return Promise.resolve(false);
+ if(p&&p.outcome===3&&!confirm(forecast(a,p)+' Send this attack anyway?'))return Promise.resolve(false);
+ return request({mode:1,difficulty:game.difficulty,actions:[...game.actions,a]},false,{kind:'human',action:a,preview:p});
+}
+async function request(payload, resetSelection=false, feedback={}){
+ if(busy)return false;setBusy(true);$('error').textContent='';$('notice').textContent=payload.mode===0&&payload.actions.length?'Red is planning its orders...':'Fe is checking your order...';
+ try{
+  const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const data=await r.json();if(!r.ok)throw Error(data.error||'Request failed.');
+  game=data;
+  if(resetSelection)selected=feedback.kind==='new'?((game.tiles.find(t=>t.owner===1)||{}).index??null):null;
+  render();checkpoint();$('notice').textContent='';
+  if(feedback.kind==='human'){
+   $('human-activity').textContent='Your last order: '+actionName(feedback.action)+'. '+forecast(feedback.action,feedback.preview,true);
+   if(game.state.side===2&&!game.state.result&&feedback.action[0]!==0)$('turn-guide').textContent='You used both orders. Review the board, then press Run computer turn. Red has not moved yet.';
+  }
+  const computerActions=payload.mode===0?data.actions.slice(payload.actions.length):[];
+  if(computerActions.length)$('activity').textContent='Computer: '+computerActions.map((a,i)=>(i+1)+'. '+actionName(a)).join('; ')+(game.state.result?'. Match ended.':'. Your turn is ready.');
+  else if(resetSelection){$('human-activity').textContent='';$('activity').textContent=feedback.kind==='new'?'New game. Select a blue territory and spend your first order.':'Replay restored and validated by Fe.';}
+  return true;
+ }
+ catch(e){$('error').textContent=e.message;$('notice').textContent='';return false;}
+ finally{setBusy(false);}
+}
+function load(text){
+ try{const data=JSON.parse(text);if(!data||data.version!==1)throw Error('Unsupported replay version.');return request({mode:1,difficulty:data.difficulty,actions:data.actions},true);}
+ catch(e){$('error').textContent='Cannot load replay: '+e.message;return Promise.resolve(false);}
+}
+function activeCheckpoint(){
+ if(game)return !game.state.result&&game.actions.length>0;
+ try{const previous=JSON.parse(localStorage.getItem('fe-kingdoms-v1'));return !!previous&&Array.isArray(previous.actions)&&previous.actions.length>0;}catch{return false;}
+}
+$('new').onclick=()=>{
+ if(busy)return;
+ if(activeCheckpoint()&&!confirm('Start a new game and replace the local checkpoint? Save a replay first if you want to keep this match.'))return;
+ return request({mode:1,difficulty:Number($('difficulty').value),actions:[]},true,{kind:'new'});
+};
+$('all').onclick=()=>{selected=null;render();};
+$('save').onclick=()=>{if(!game)return;const url=URL.createObjectURL(new Blob([JSON.stringify(replay(),null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='fe-kingdoms-replay.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('load').onclick=()=>$('file').click();
+$('file').onchange=async()=>{
+ const file=$('file').files[0];$('file').value='';if(!file||busy)return;
+ if(file.size>32768){$('error').textContent='Replay file is too large.';return;}
+ setBusy(true);
+ try{const text=await file.text();setBusy(false);await load(text);}
+ catch(e){$('error').textContent='Cannot read replay: '+e.message;}
+ finally{setBusy(false);}
+};
+$('resume').onclick=()=>{try{const text=localStorage.getItem('fe-kingdoms-v1');if(!text)throw Error('No saved game in this browser.');return load(text);}catch(e){$('error').textContent=e.message;}};
+let saved=false;try{saved=!!localStorage.getItem('fe-kingdoms-v1');}catch{}
+if(saved){$('notice').textContent='A local checkpoint is available. Resume it or start a new game.';}
+else request({mode:1,difficulty:0,actions:[]},true,{kind:'new'});
+</script>
+</html>

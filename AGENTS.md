@@ -1,0 +1,2 @@
+# Fe Kingdoms
+Keep all authoritative game rules, legal actions, supply, economy, terminal states, evaluation and opponent decisions in Fe. The browser is primary; host Python only transports and serializes. Preserve deterministic action replay and tests. Do not publish, register, deploy or alter the separate transition-lab or Dragonstales projects. Use the existing pinned Fe image and bounded offline tests. Run scripts/verify.ps1 after changes; distinguish UI unit tests from actual browser and human playtesting.

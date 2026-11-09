@@ -1,0 +1,121 @@
+#[test]
+fn map_and_initial_rules() {
+    let s=initial()
+    assert(!adjacent(4,5) && adjacent(0,5) && adjacent(0,1))
+    assert(s.gold[1]==s.gold[2] && s.troops[0]==s.troops[14])
+    assert(is_legal(s,Action {kind:2,from:0,to:0,amount:2}))
+    assert(!is_legal(s,Action {kind:1,from:0,to:14,amount:4}))
+    assert(!is_legal(s,Action {kind:1,from:14,to:13,amount:4}))
+    assert(!is_legal(s,Action {kind:2,from:0,to:0,amount:12}))
+}
+#[test]
+fn economy_and_order_limits() {
+    var s=initial()
+    s=apply(s,Action {kind:2,from:0,to:0,amount:2})
+    assert(s.troops[0]==7 && s.gold[1]==3 && s.orders==1 && s.side==1)
+    s=apply(s,Action {kind:2,from:0,to:0,amount:2})
+    assert(s.troops[0]==9 && s.gold[1]==0 && s.orders==2 && s.side==2 && s.gold[2]==8)
+    assert(!is_legal(s,Action {kind:2,from:0,to:0,amount:2}))
+}
+#[test]
+fn combat_and_capital_victory() {
+    var s=initial()
+    s.troops[1]=4
+    s=apply(s,Action {kind:1,from:1,to:6,amount:3})
+    assert(s.owner[6]==1 && s.troops[6]==2 && s.troops[1]==1)
+    s=initial()
+    s.owner[13]=1
+    s.troops[13]=9
+    s=apply(s,Action {kind:1,from:13,to:14,amount:8})
+    assert(s.result==1 && s.troops[14]==2)
+    assert(legal(s).len==0)
+}
+#[test]
+fn hill_ties_and_defender_survival() {
+    var s=initial()
+    s.owner[2]=1
+    s.troops[2]=3
+    s=apply(s,Action {kind:1,from:2,to:3,amount:2})
+    assert(s.owner[3]==0 && s.troops[3]==1)
+    s=initial()
+    s.owner[2]=1
+    s.troops[2]=4
+    s=apply(s,Action {kind:1,from:2,to:3,amount:3})
+    assert(s.owner[3]==1 && s.troops[3]==1)
+}
+#[test]
+fn supply_cut_and_reconnect() {
+    var s=initial()
+    s.owner[2]=1
+    s.owner[3]=1
+    s.owner[1]=2
+    s.troops[3]=4
+    let cut=supply(s,1)
+    assert(!cut[2] && !cut[3])
+    assert(!is_legal(s,Action {kind:2,from:3,to:3,amount:2}))
+    s.side=2
+    s=apply(s,pass())
+    assert(s.side==1 && s.troops[3]==3)
+    s.owner[1]=1
+    let joined=supply(s,1)
+    assert(joined[2] && joined[3])
+    assert(is_legal(s,Action {kind:2,from:3,to:3,amount:2}))
+}
+#[test]
+fn explicit_stalemates() {
+    var s=initial()
+    for _i in 0 .. 4 {s=apply(s,pass())}
+    assert(s.result==3)
+    s=initial()
+    s.turn=120
+    s=apply(s,pass())
+    assert(s.result==3)
+}
+#[test]
+fn ai_takes_immediate_capital() {
+    var s=initial()
+    s.owner[13]=1
+    s.troops[13]=9
+    for difficulty in 0 .. 2 {
+        var stats=Search {nodes:0}
+        let a=with(Search=stats) {choose(s,difficulty.downcast_unchecked())}
+        assert(apply(s,a).result==1)
+        assert(stats.nodes>0)
+    }
+}
+#[test]
+fn generated_legal_actions_preserve_bounds() {
+    var s=initial()
+    var seed:usize=17
+    for _step in 0 .. 240 {
+        if s.result!=0 {break}
+        let choices=legal(s)
+        assert(choices.len>0 && choices.len<=128)
+        for k in 0 .. choices.len {
+            let next=apply(s,choices.items[k])
+            assert(next.gold[1]>=0 && next.gold[2]>=0 && next.gold[1]<=30 && next.gold[2]<=30)
+            assert(next.orders>=0 && next.orders<=2)
+            for i in 0 .. 15 {
+                assert(next.owner[i]>=0 && next.owner[i]<=2)
+                assert(next.troops[i]>=1 && next.troops[i]<=12)
+                assert(next.fort[i]>=0 && next.fort[i]<=2)
+            }
+        }
+        seed=(seed*251+13849)%65521
+        s=apply(s,choices.items[seed%choices.len])
+    }
+    assert(s.result!=0)
+}
+#[test]
+fn hard_search_is_deterministic_and_deeper() {
+    var s=initial()
+    s=apply(s,pass())
+    var easy=Search {nodes:0}
+    var hard=Search {nodes:0}
+    var repeat=Search {nodes:0}
+    let a=with(Search=easy) {choose(s,0)}
+    let b=with(Search=hard) {choose(s,1)}
+    let c=with(Search=repeat) {choose(s,1)}
+    assert(is_legal(s,a) && is_legal(s,b) && same_action(b,c))
+    assert(hard.nodes>easy.nodes && hard.nodes==repeat.nodes)
+}
