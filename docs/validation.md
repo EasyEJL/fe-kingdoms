@@ -39,3 +39,14 @@ Generated v4 evidence includes `verification.json`, `matches-summary.json`, `htt
 - Play to a result and save the replay if a loss, stalemate or computer decision seems surprising. This is the useful next input before adding water, roads or more troop types.
 
 The current v4 browser has not been independently exercised by automated browser clicks or a new human playtest. Mocked DOM tests, native tests and genuine HTTP requests remain distinct from those missing checks.
+
+
+## Isolated visual-map milestone
+
+`node tests/test_ui.js` passes after the final visual edits. `scripts/verify.ps1` also completed successfully: 23 Fe tests, 12 adapter tests, six full deterministic matches/replays, parser checks and the 53-request/69-action HTTP match. Current source hashes match the generated verification record. Native Fe, frozen replay engines and HTTP adapter are unchanged from 3b05525.
+
+New mocked UI coverage includes badge counts/ownership, contextual role help, generic legacy troop display, keyboard-focus hooks, pure view-only zoom, zoom bounds and a 9x5 map fitted into a 320px viewport (284px rendered width after padding). Food-meter values are checked against deliberately distinct Fe projections so presentation cannot silently substitute its own arithmetic. Preview-launcher syntax and existing-preview detection also pass.
+
+Actual Chrome inspection in a separate localhost:8766 window verified fresh small-map illustrations, ownership/count badges, selection and the first recruitment (A2: 1 to 3 troops; food 12 to 10; orders 2 to 1; Red unchanged). Browser inspection then stopped during a losing-attack confirmation because the tool could not verify the browser URL. No confirmation was accepted; the preview window may retain that dialog. No live-game tab, checkpoint or server was changed.
+
+Final contextual-help and narrow-Fit fixes received source review and unit tests, not another browser pass. Still check visually: large-map zoom/panning, narrow layouts, cutoff/selection label spacing, keyboard behavior, second order/Red handoff and save/load. The existing complete HTTP and mocked UI checks are not substitutes for these visual checks. Preview is at localhost:8766; the active game remains localhost:8765.

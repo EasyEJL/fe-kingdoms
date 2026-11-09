@@ -5,6 +5,10 @@
 <title>Fe Kingdoms</title>
 <style>
 :root{font-family:system-ui,sans-serif;color:#202b35;background:#eef1f2}body{max-width:1050px;margin:24px auto;padding:0 16px}h1{margin-bottom:4px}p{line-height:1.5}button,select{font:inherit;padding:8px 12px;border:1px solid #8b969e;border-radius:5px;background:white;color:inherit;cursor:pointer}button:disabled,select:disabled{cursor:wait;opacity:.5}button:hover:not(:disabled){background:#eef6fd}header p{margin-top:0;color:#58636a}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:18px 0}.layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(250px,1fr);gap:20px}.map-scroll{overflow:auto;padding:8px 4px 12px}.board{position:relative}.tile{position:absolute!important;width:100px;height:116px;min-height:0!important;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);padding:3px!important;background:#a6adb3!important;border:0!important;gap:0!important}.tile .hex-content{width:100%;height:100%;clip-path:inherit;background:#f7f5ee;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px}.tile.blue{background:#3976b9!important}.tile.blue .hex-content{background:#dfedff}.tile.red{background:#b44c40!important}.tile.red .hex-content{background:#ffe4df}.tile.recent{background:#b77d09!important}.tile.selected{background:#16232d!important}.tile.selected .hex-content{box-shadow:inset 0 0 0 5px #16232d}.tile.legacy,.tile.legacy .hex-content{clip-path:none}.territory{border:1px solid #c9d1d8;border-radius:5px;margin:8px 0;overflow:hidden}.territory-heading{width:100%;border:0;border-radius:0;text-align:left;font-weight:600}.territory.open .territory-heading{background:#dfedff}.territory-orders{padding:8px;display:flex;flex-direction:column;gap:7px}.global-orders{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}.economy-row{margin:6px 0}.shortage{color:#a22518;font-weight:600}.tile.blocked{background:#4e535a!important}.tile.blocked .hex-content{background:#d2d4d6}.legacy-note{padding:12px;background:#fff1cf;border:1px solid #ae812c}.tile{min-height:122px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:2px solid #a6adb3;background:#f7f5ee}.tile.blue{background:#dfedff;border-color:#3976b9}.tile.red{background:#ffe4df;border-color:#b44c40}.tile.selected{outline:3px solid #202b35;outline-offset:1px}.tile strong{font-size:1.4rem}.tile small{font-size:.75rem}.tile .place{font-weight:700}.tile.unsupplied{border-style:dashed}.panel{background:white;border:1px solid #d1d8dd;border-radius:6px;padding:16px}.panel h2{font-size:1.1rem;margin:0 0 12px}.actions{display:flex;flex-direction:column;gap:7px;max-height:350px;overflow:auto}.actions button{text-align:left}.forecast{display:block;font-size:.8rem;margin-top:5px}.risky{border-color:#a22518!important}.risky .forecast{color:#a22518}.computer-turn{font-weight:bold;background:#ffe4df}.tile.recent{box-shadow:inset 0 0 0 3px #d19520}#turn-guide{font-weight:600;margin:8px 0}.status{padding:12px 0;font-weight:600;min-height:44px}.error{color:#a22518;font-weight:600;min-height:24px}.muted{font-size:.85rem;color:#58636a}.legend{font-size:.85rem;margin:12px 0}.blue-text{color:#205a99}.red-text{color:#a3372d}details{margin:20px 0}summary{cursor:pointer;font-weight:600}li{margin:8px 0}#log{font-size:.85rem;line-height:1.6;max-height:150px;overflow:auto}#notice{font-weight:600}.file{display:none}@media(max-width:750px){.layout{grid-template-columns:1fr}.tile{min-height:105px}.tile small{font-size:.65rem}.actions{max-height:240px}}
+/* Presentation only: legal orders and forecasts come from Fe. */
+:root{background:#e9eee9;color:#23342e}body{max-width:1440px}header h1{letter-spacing:-.04em;font-size:2rem}.layout{grid-template-columns:minmax(0,1fr) minmax(330px,390px);align-items:start}.panel{border-radius:12px;border-color:#cbd5cc;box-shadow:0 3px 12px #253b2510}.map-shell{background:#dce5d8;border:1px solid #becbbc;border-radius:12px;overflow:hidden}.map-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px;background:#f8faf5;border-bottom:1px solid #c5d1bf}.map-tools strong{margin-right:auto}.map-tools button{padding:6px 12px}.map-scroll{padding:18px;max-height:76vh;min-height:260px;overflow:auto;overscroll-behavior:contain}.map-stage{position:relative}.board{transform-origin:top left}.tile{width:144px;height:166px;padding:4px!important}.tile:hover{filter:brightness(1.07)}.tile .hex-content{background:#f5f1df!important;position:relative;gap:2px;justify-content:flex-start;padding-top:20px;box-sizing:border-box}.tile.blue .hex-content{background:#e5efef!important}.tile.red .hex-content{background:#f6e6dc!important}.tile.blocked .hex-content{background:#d2d7d0!important}.tile.selected{background:#112b24!important;filter:drop-shadow(0 0 4px #102c24)}.tile:focus-visible{background:#000!important;filter:drop-shadow(0 0 5px #000)}button:focus-visible,select:focus-visible,.map-scroll:focus-visible{outline:3px solid #125b9c;outline-offset:3px}.tile.recent .hex-content:after{content:'LAST';position:absolute;bottom:12px;font-size:8px;font-weight:800;background:#f9d580;padding:1px 5px;border-radius:3px}.tile.selected .hex-content:after{content:'SELECTED';position:absolute;bottom:12px;font-size:8px;padding:1px 5px;background:#23342e;color:white}.tile .place{font-size:12px;line-height:16px;display:flex;gap:7px;align-items:center}.owner-mark{font-size:9px;letter-spacing:.05em;padding:1px 5px;border-radius:3px;background:#e1dece}.blue .owner-mark{background:#245d88;color:white}.red .owner-mark{background:#973f32;color:white}.terrain-art{display:block;width:58px;height:38px;color:#42684b}.terrain-art svg{height:100%;width:100%}.tile .terrain-label{font-size:10px;line-height:12px;font-weight:600}.unit-row{display:flex;justify-content:center;gap:7px;margin:4px 0 2px}.unit-token{position:relative;display:inline-flex;width:24px;height:24px;align-items:center;justify-content:center;color:#263e38;background:#fffdf4;border:1px solid #738777;border-radius:6px}.unit-token svg{width:20px;height:20px}.unit-count{position:absolute;right:-6px;top:-7px;min-width:15px;height:15px;border-radius:10px;background:#203a31;color:white;font-size:10px;line-height:15px;text-align:center;border:1px solid white;font-weight:750}.tile .tile-meta{font-size:9px;line-height:12px}.tile .cut-off{background:#6b382d;color:white;border-radius:3px;padding:0 4px}.tile .total{font-size:10px}.legend{line-height:1.65;color:#47594e}.territory-heading{padding:12px}.territory-orders{padding:12px;gap:10px}.territory-orders>button{padding:12px;text-align:left;line-height:1.45}.territory.open{border-color:#608779}.role-guide{display:grid;gap:8px;margin:0 0 5px}.role-card{display:grid;grid-template-columns:30px 1fr;gap:10px;font-size:.8rem;line-height:1.45;padding:8px;background:#f3f6f0;border-radius:6px}.role-card .unit-token{margin-top:7px}.role-card strong{display:block}.role-note{font-size:.78rem;line-height:1.5;margin:4px 0;color:#47594e}.unit-composition{margin:0;font-weight:600}.economy-row{background:#fff;padding:12px;border:1px solid #cbd5cc;border-radius:8px;line-height:1.6}.food-meters{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px}.food-meters label{display:flex;align-items:center;gap:6px;font-size:.78rem}.food-meters meter{width:100px;height:16px}.status{min-height:0;font-size:1.05rem}.forecast{line-height:1.5}.computer-turn{padding:14px}.map-help{margin:8px 0}.role-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}.role-legend span{display:inline-flex;align-items:center;gap:6px}.role-legend svg{height:20px;width:20px}
+@media(max-width:950px){.layout{grid-template-columns:minmax(0,1fr)}.map-scroll{max-height:65vh}}@media(max-width:500px){body{padding:0 10px}.map-tools{gap:5px}.map-tools strong{width:100%}.map-scroll{padding:10px}.tile small{font-size:9px}.toolbar button{font-size:.85rem}}
+.map-stage>.board{position:absolute;left:0;top:0}.tile .hex-content{padding-top:18px}.terrain-art{height:30px}.tile.recent .hex-content:after,.tile.selected .hex-content:after{bottom:10px}.tile.unsupplied .hex-content{background-image:repeating-linear-gradient(135deg,transparent,transparent 9px,#6b382d0c 9px,#6b382d0c 12px)!important}
 </style>
 <header><h1>Fe Kingdoms</h1><p>Two kingdoms. One map. A native Fe opponent.</p></header>
 <div class="toolbar">
@@ -18,7 +22,7 @@
 <div id="error" class="error" role="alert"></div>
 <div id="status" class="status" aria-live="polite"></div><div id="economy" class="muted" aria-live="polite"></div>
 <div class="panel" style="margin-bottom:16px"><strong id="goal">Capture Red's capital. Keep your capital safe.</strong><p id="turn-guide" aria-live="polite"></p><p id="opening-hint" class="muted"></p><small>TWO orders total across your whole kingdom, not per territory. Selecting tiles is free. You can use the same territory twice. Spend your orders, then press Run computer turn.</small></div><div class="layout">
-<section><div class="map-scroll"><div id="board" class="board" aria-label="Kingdom map"></div></div><p class="legend"><span class="blue-text">Blue: you</span> · <span class="red-text">Red: computer</span> · Cream: neutral<br>CUT OFF marks territory disconnected from its capital. Numbers are troops. Hexes share up to six neighboring edges. Mountains block movement and supply; passes cross the ridge. Select a hex for settlement and upkeep details.</p><div id="search" class="muted"></div></section>
+<section><div class="map-shell"><div class="map-tools"><strong>Kingdom map</strong><button id="zoom-out" aria-label="Zoom map out">-</button><output id="zoom-label" aria-live="polite">100%</output><button id="zoom-in" aria-label="Zoom map in">+</button><button id="zoom-fit">Fit map</button><button id="zoom-reset">100%</button></div><div id="map-scroll" class="map-scroll" tabindex="0" aria-label="Scrollable kingdom map" aria-describedby="map-help"><div id="map-stage" class="map-stage"><div id="board" class="board" aria-label="Kingdom map"></div></div></div></div><p id="map-help" class="muted map-help">Zoom for detail, scroll to explore. Tab to a hex and press Enter to inspect it. Arrow keys scroll the focused map.</p><div class="legend"><span class="blue-text">BLUE / you</span> | <span class="red-text">RED / computer</span> | N / neutral<br>Number badges count each troop role. CUT OFF means disconnected from the capital. Mountains block movement and supply; passes cross the ridge. Gold edges mark the last order, dark edges the selection.<div id="role-legend" class="role-legend"></div></div><div id="search" class="muted"></div></section>
 <aside class="panel"><h2 id="action-title">Your territories</h2><p id="selection-help" class="muted">Open one territory below or select it on the map.</p><p id="territory-detail" class="muted"></p><div id="global-actions" class="global-orders"></div><div id="actions"></div></aside>
 </div>
 <details><summary>Current v4 rules and strategy basics</summary><ul>
@@ -38,7 +42,7 @@ const $=id=>document.getElementById(id);
 const terrain=['Plain','Farm','Town','Hill','Capital','Mountain','Terrain 6','Pass'];
 const settlementNames=['None','Village','Town'];
 const names=['Neutral','Blue','Red'];
-let game=null, selected=null, busy=false;
+let game=null, selected=null, busy=false, mapZoom=1;
 const CURRENT_VERSION=4, CHECKPOINT='fe-kingdoms-v4', CAMPAIGN_CHECKPOINT='fe-kingdoms-v3', PREVIOUS_CHECKPOINT='fe-kingdoms-v2', LEGACY_CHECKPOINT='fe-kingdoms-v1';
 function mapInfo(){return game&&game.map||{width:5,height:3,count:15,topology:game&&game.version===1?0:1,scenario:0,blueCapital:0,redCapital:14,orderBudget:2,maxTurns:120};}
 const place=i=>String.fromCharCode(65+i%mapInfo().width)+(Math.floor(i/mapInfo().width)+1);
@@ -46,6 +50,39 @@ const rulesLabel=v=>v===1?'square':v===2?'hex':'campaign';
 const composition=(infantry,cavalry,siege)=>'Infantry '+infantry+', cavalry '+cavalry+', siege '+siege;
 const tileComposition=t=>t.infantry===undefined?'':composition(t.infantry,t.cavalry,t.siege);
 const readOnly=()=>!!game&&game.version!==CURRENT_VERSION;
+// Small local vector illustrations, never remote assets or engine-derived rules.
+const art={
+ plain:'<path d="M3 30Q16 15 31 28Q45 15 61 29"/><path d="M14 28l-2-6m4 5 2-7m27 6 2-6"/>',
+ farm:'<path d="M3 34l17-16 41 10-18 10z" fill="#d6bd74"/><path d="M13 33l15-13m-5 16 15-13m-4 15 14-12"/><path d="M12 19V7m0 5-5-4m5 9 5-5"/>',
+ town:'<path d="M8 19l12-10 12 10m-21 0v17h18V19m5 0 12-10 12 10m-21 0v17h18V19" fill="#dfc698"/><path d="M18 36V25h6v11m19 0V25h6v11"/>',
+ hill:'<path d="M3 35Q18 3 34 35M25 35Q43 0 61 35" fill="#9db18a"/><path d="M31 24q12-17 24 0"/>',
+ capital:'<path d="M11 35V13h8v6h8V9h10v10h8v-6h8v22z" fill="#d6bd74"/><path d="M28 35V25h8v10M32 9V2l12 3-12 3"/>',
+ mountain:'<path d="M3 36L22 5l15 23L47 9l15 27z" fill="#a4aaa1"/><path d="M16 15l6-10 6 10-6-3zM41 19l6-10 6 10" fill="white"/>',
+ pass:'<path d="M2 35L16 9l13 26M38 35L50 9l13 26" fill="#a4aaa1"/><path d="M29 39l8-12-6-8 6-14" stroke="#b18b3d" stroke-width="4"/>',
+ infantry:'<path d="M7 4h18v12q0 9-9 13-9-4-9-13z" fill="#bdd0bb"/><path d="M16 8v15m-5-9h10"/>',
+ cavalry:'<path d="M7 28h20l-2-9-5-9 1-6-7 3-6 9 8 1-7 7z" fill="#d6bd74"/><path d="M16 11h1m2 6-4 5"/>',
+ siege:'<path d="M5 24h23M9 23l8-15 7 15M16 10l9-7m-3 2 5 3"/><circle cx="9" cy="26" r="4" fill="#d6bd74"/><circle cx="25" cy="26" r="4" fill="#d6bd74"/>',
+ troops:'<path d="M7 4h18v12q0 9-9 13-9-4-9-13z" fill="#bdd0bb"/>'
+};
+function icon(kind,terrainIcon=false){const span=document.createElement('span');span.className=terrainIcon?'terrain-art':'unit-icon';span.setAttribute('aria-hidden','true');span.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="'+(terrainIcon?'0 0 64 40':'0 0 32 32')+'" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">'+(art[kind]||art.plain)+'</svg>';return span;}
+function unitToken(kind,count){const token=document.createElement('span');token.className='unit-token';token.setAttribute('aria-label',kind+': '+count);token.title=kind+': '+count;token.append(icon(kind));const badge=document.createElement('span');badge.className='unit-count';badge.textContent=String(count);token.append(badge);return token;}
+function roleGuide(t){
+ const box=document.createElement('div');box.className='role-guide';
+ for(const [kind,title,help] of [
+  ['infantry','Infantry · 2 for 3 gold / 2 food','Economical bodies for garrisons and defense. Base attack 1; removed first when losses occur.'],
+  ['cavalry','Cavalry · 1 for 4 gold / 2 food','Base attack 1, plus 1 attacking a plain or farm. No extra movement speed. Requires a supplied town.'],
+  ['siege','Siege · 1 for 5 gold / 3 food','Base attack 1, plus 2 against a fort, settlement OR capital (not per feature). No movement penalty. Requires a supplied town.']]){
+  const card=document.createElement('div');card.className='role-card';card.append(unitToken(kind,t[kind]));const text=document.createElement('div'),head=document.createElement('strong');head.textContent=title;text.append(head);const desc=document.createElement('span');desc.textContent=help;text.append(desc);card.append(text);box.append(card);
+ }
+ const note=document.createElement('p');note.className='role-note';note.textContent='All roles defend at strength 1, move one hex per order, use one stack slot and have the same upkeep by headcount. Losses: infantry, then cavalry, then siege. Paid training converts one infantry at the recruit cost; it does not add a troop. Read the Fe forecast for the actual moving force and outcome.';box.append(note);return box;
+}
+function applyMapZoom(){
+ const board=$('board');board.style.transform='scale('+mapZoom+')';$('map-stage').style.width=(parseFloat(board.style.width||0)*mapZoom)+'px';$('map-stage').style.height=(parseFloat(board.style.height||0)*mapZoom)+'px';$('zoom-label').textContent=Math.round(mapZoom*100)+'%';
+}
+function zoomMap(value){if(busy)return;mapZoom=Math.max(.1,Math.min(2,value));applyMapZoom();}
+$('zoom-in').onclick=()=>zoomMap(mapZoom+.15);$('zoom-out').onclick=()=>zoomMap(mapZoom-.15);$('zoom-reset').onclick=()=>zoomMap(1);
+$('zoom-fit').onclick=()=>{zoomMap((($('map-scroll').clientWidth||600)-36)/parseFloat($('board').style.width||600));$('map-scroll').scrollLeft=0;$('map-scroll').scrollTop=0;};
+for(const kind of ['infantry','cavalry','siege']){const label=document.createElement('span');label.append(icon(kind));const text=document.createElement('span');text.textContent=kind[0].toUpperCase()+kind.slice(1);label.append(text);$('role-legend').append(label);}
 function payload(mode,actions){return {version:game.version,scenario:game.map?.scenario??0,mode,difficulty:game.difficulty,actions};}
 const actionName=a=>a[0]===0?'End turn':a[0]===1?'Move '+a[3]+' troops: '+place(a[1])+' -> '+place(a[2]):a[0]===2?'Recruit +2 '+(game&&game.version>=4?'infantry':'troops')+' at '+place(a[1]):a[0]===3?'Fortify '+place(a[1]):a[0]===4?(a[3]===1?'Build village at ':'Upgrade to town at ')+place(a[1]):a[0]===5?'Recruit +1 cavalry at '+place(a[1]):a[0]===6?'Recruit +1 siege at '+place(a[1]):a[0]===7?'Train 1 infantry -> cavalry at '+place(a[1]):a[0]===8?'Train 1 infantry -> siege at '+place(a[1]):'Unknown order';
 function forecastText(a,p,done=false){
@@ -79,9 +116,12 @@ function setBusy(value){busy=value;document.querySelectorAll('button,select').fo
 function actionButton(a,index){
  const p=game.previews&&game.previews[index],b=document.createElement('button');b.className=p&&p.outcome===3?'risky':'';
  const title=document.createElement('span');title.textContent=a[0]===0?'End my turn (skip '+game.state.orders+' remaining '+(game.state.orders===1?'order':'orders')+')':actionName(a)+' | 1 order';b.append(title);
- const detail=document.createElement('small');detail.className='forecast';detail.textContent=forecast(a,p)+(p&&p.food1After!==undefined?' Your food after this order: '+p.food1After+'.':'');b.append(detail);b.onclick=()=>perform(a,p);return b;
+ const detail=document.createElement('small');detail.className='forecast';detail.textContent=forecast(a,p)+(p&&p.food1After!==undefined?' Your food after this order: '+p.food1After+'.':'');b.append(detail);
+ const roleHelp={2:'Infantry: two bodies for the cost; base attack/defense 1. Lost first in battle.',5:'Cavalry: +1 attack on plain/farm. Only one recruit; no extra speed or defense.',6:'Siege: +2 attack against fort, settlement OR capital. Only one recruit; no extra defense or movement penalty.',7:'Cavalry: +1 attack on plain/farm; no extra speed or defense. Paid conversion, not an extra troop.',8:'Siege: +2 attack against fort, settlement OR capital; no extra defense or movement penalty. Paid conversion, not an extra troop.'};
+ if(game.version>=4&&roleHelp[a[0]]){const help=document.createElement('small');help.className='forecast role-benefit';help.textContent=roleHelp[a[0]];b.append(help);}
+ b.onclick=()=>perform(a,p);return b;
 }
-function selectTerritory(index){if(busy)return;selected=selected===index?null:index;render();}
+function selectTerritory(index,focusId){if(busy)return;selected=selected===index?null:index;render();if(focusId)$(focusId)?.focus({preventScroll:true});}
 function render(){
  if(!game)return;
  const s=game.state,m=mapInfo(),budget=m.orderBudget||2,legacy=readOnly();
@@ -100,21 +140,31 @@ function render(){
   if(e.projectedFood!==undefined)row.textContent+=' If the board is unchanged, next upkeep leaves '+e.projectedFood+' food.';
   if(e.disconnectedTiles)row.textContent+=' '+e.disconnectedTiles+' cut-off '+(e.disconnectedTiles===1?'territory':'territories')+'.';
   if(e.shortageLossesNextTurn>0)row.textContent+=' WARNING: Fe projects '+e.shortageLossesNextTurn+' troop '+(e.shortageLossesNextTurn===1?'loss':'losses')+' from food shortage next turn.';
+  const meters=document.createElement('span');meters.className='food-meters';
+  for(const [label,value] of [['Stored',e.food],['After next upkeep (Fe)',e.projectedFood]])if(value!==undefined){const wrap=document.createElement('label');wrap.textContent=label+': '+value+'/40 ';const meter=document.createElement('meter');meter.min=0;meter.max=40;meter.value=value;meter.setAttribute('aria-label',(e.side===1?'Your':'Red')+' food '+label+': '+value+' of 40');wrap.append(meter);meters.append(wrap);}
+  row.append(meters);
   $('economy').append(row);
  }
  $('board').replaceChildren();
- const hex=m.topology===1,stepX=104,stepY=hex?90:120;
+ const hex=m.topology===1,stepX=148,stepY=hex?128:172;
  $('board').style.width=(m.width*stepX+(hex?(m.height-1)*stepX/2:0))+'px';
- $('board').style.height=((m.height-1)*stepY+116)+'px';
+ $('board').style.height=((m.height-1)*stepY+166)+'px';
+ applyMapZoom();
  const last=game.actions[game.actions.length-1];
  for(const t of game.tiles){
   const q=t.q??t.index%m.width,r=t.r??Math.floor(t.index/m.width),blocked=t.passable===0||t.passable===false;
   const b=document.createElement('button');b.className='tile '+(blocked?'blocked ':'')+(!hex?'legacy ':'')+(t.owner===1?'blue':t.owner===2?'red':'')+(t.index===selected?' selected':'')+(!t.supplied&&t.owner?' unsupplied':'')+(last&&last[0]!==0&&(last[1]===t.index||last[2]===t.index)?' recent':'');
   b.style.left=((q+(hex?r/2:0))*stepX)+'px';b.style.top=(r*stepY)+'px';
-  b.setAttribute('aria-pressed',String(t.index===selected));b.setAttribute('aria-label',place(t.index)+', '+terrain[t.terrain]+', '+names[t.owner]+', '+t.troops+' troops, fort '+t.fort+', '+(blocked?'impassable':t.supplied?'supplied':'not supplied'));
+  b.id='hex-'+t.index;b.setAttribute('aria-pressed',String(t.index===selected));b.setAttribute('aria-label',place(t.index)+', '+terrain[t.terrain]+', '+names[t.owner]+', '+t.troops+' troops'+(tileComposition(t)?', '+tileComposition(t):'')+', fort '+t.fort+(t.settlement?', '+settlementNames[t.settlement]:'')+', '+(blocked?'impassable':t.supplied?'supplied':'not supplied'));
   const inside=document.createElement('span');inside.className='hex-content';
-  for(const [tag,text,cls] of [['span',place(t.index),'place'],['small',terrain[t.terrain],''],['strong',blocked?'--':String(t.troops),''],['small',blocked?'No entry':names[t.owner]+' | Fort '+t.fort,''],['small',blocked?'Impassable':t.owner?(t.supplied?'Supplied':'CUT OFF'):'Neutral','']]){const e=document.createElement(tag);e.textContent=text;e.className=cls;inside.append(e);}
-  b.append(inside);b.onclick=()=>selectTerritory(t.index);$('board').append(b);
+  const placeLabel=document.createElement('span');placeLabel.className='place';placeLabel.textContent=place(t.index);const owner=document.createElement('span');owner.className='owner-mark';owner.textContent=t.owner===1?'BLUE':t.owner===2?'RED':'N';placeLabel.append(owner);inside.append(placeLabel);
+  inside.append(icon(['plain','farm','town','hill','capital','mountain','plain','pass'][t.terrain],true));
+  const land=document.createElement('span');land.className='terrain-label';land.textContent=terrain[t.terrain]+(t.settlement>0?' / '+settlementNames[t.settlement]:'');inside.append(land);
+  const units=document.createElement('span');units.className='unit-row';
+  if(!blocked){if(t.infantry===undefined)units.append(unitToken('troops',t.troops));else for(const kind of ['infantry','cavalry','siege'])if(t[kind]>0)units.append(unitToken(kind,t[kind]));}else units.textContent='No entry';inside.append(units);
+  const meta=document.createElement('small');meta.className='tile-meta';meta.textContent=blocked?'Impassable':t.troops+' total | Fort '+t.fort;inside.append(meta);
+  if(t.owner&&!t.supplied&&!blocked){const supply=document.createElement('small');supply.className='tile-meta cut-off';supply.textContent='CUT OFF';inside.append(supply);}
+  b.append(inside);b.onclick=()=>selectTerritory(t.index,b.id);$('board').append(b);
  }
  const tile=game.tiles.find(t=>t.index===selected);
  $('selection-help').textContent=!tile?'Open any owned territory below. Only one is expanded at a time.':tile.owner!==1?place(tile.index)+' belongs to '+names[tile.owner]+'. Open a blue territory to see its legal moves and attacks.':place(tile.index)+': '+tile.troops+' troops, fort '+tile.fort+'. '+(tile.supplied?'Supplied.':'Cut off from your capital.')+' Every listed order is generated by Fe.';
@@ -125,11 +175,13 @@ function render(){
  else {const passIndex=game.legal.findIndex(a=>a[0]===0);if(passIndex>=0)$('global-actions').append(actionButton(game.legal[passIndex],passIndex));}
  for(const owned of game.tiles.filter(t=>t.owner===1)){
   const open=selected===owned.index,card=document.createElement('div');card.className='territory'+(open?' open':'');
-  const heading=document.createElement('button');heading.className='territory-heading';heading.setAttribute('aria-expanded',String(open));heading.textContent=(open?'[-] ':'[+] ')+place(owned.index)+' | '+terrain[owned.terrain]+' | '+owned.troops+' troops';heading.onclick=()=>selectTerritory(owned.index);card.append(heading);
+  const heading=document.createElement('button');heading.id='territory-'+owned.index;heading.className='territory-heading';heading.setAttribute('aria-expanded',String(open));heading.textContent=(open?'[-] ':'[+] ')+place(owned.index)+' | '+terrain[owned.terrain]+' | '+owned.troops+' troops';heading.onclick=()=>selectTerritory(owned.index,heading.id);card.append(heading);
   if(open){const body=document.createElement('div');body.className='territory-orders';let count=0;
    if(tileComposition(owned)){const units=document.createElement('p');units.className='muted unit-composition';units.textContent=tileComposition(owned);body.append(units);}
+   if(!legacy&&owned.infantry!==undefined){const note=document.createElement('p');note.className='role-note';note.textContent='Every role: defense 1, one-hex movement, one stack slot, same upkeep per head. Specialist recruits and paid training require a supplied town.';body.append(note);}
    if(!legacy&&!s.result&&s.side===1)game.legal.forEach((a,index)=>{if(a[0]!==0&&a[1]===owned.index){body.append(actionButton(a,index));count++;}});
-   if(!count){const p=document.createElement('p');p.className='muted';p.textContent=legacy?'Legacy replay: orders are disabled.':s.result?'Match complete.':s.side!==1?'Waiting for the computer turn.':'No legal orders here right now. Try another territory.';body.append(p);}card.append(body);
+   if(!count){const p=document.createElement('p');p.className='muted';p.textContent=legacy?'Legacy replay: orders are disabled.':s.result?'Match complete.':s.side!==1?'Waiting for the computer turn.':'No legal orders here right now. Try another territory.';body.append(p);}
+   if(!legacy&&owned.infantry!==undefined){const comparison=document.createElement('details');comparison.className='role-comparison';const summary=document.createElement('summary');summary.textContent='Compare troop roles and costs';comparison.append(summary);comparison.append(roleGuide(owned));body.append(comparison);}card.append(body);
   }
   $('actions').append(card);
  }

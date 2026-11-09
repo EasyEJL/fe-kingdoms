@@ -2,6 +2,12 @@
 
 A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current source milestone is **rules version 4: hex campaigns and mixed armies**. The browser and Python adapter only display and transport Fe results.
 
+## Isolated visual preview
+
+The visual-map branch is developed in `C:\Users\Eric\dev\fe-kingdoms-visual` and served at http://localhost:8766. It does not replace the active game on port 8765. Run `scripts/preview.ps1` from this checkout to start or locate that separate preview. Do not use the ordinary launcher to switch the live game during a match.
+
+Browser saves are separate for each port. To copy a current game into the preview, use **Save replay** in the original game and **Load replay** in the preview. The original checkpoint remains untouched. No game rules or replay version change is required for this presentation-only branch.
+
 ## Play and verify
 
 From PowerShell, with Docker Desktop running and the existing pinned toolchain image available:
@@ -47,7 +53,7 @@ The campaign milestone has directed Fe tests for maps, routes, economy, supply, 
 
 The v3 campaign exposed defensive stalls: fortified passes could exceed the largest infantry attack. V4 provides explicit siege recruitment/training and mixed-army attacks. Both policies pass tactical tests for training and breaching a full fortified frontier. This does not guarantee every bot match becomes decisive. Human-versus-computer is the intended use; draw triggers are unchanged. A fresh human playtest is needed to assess enjoyment and difficulty.
 
-Eric playtested the original square game. The subsequent UI/campaign changes need a new human playtest. Mocked UI tests and HTTP tests do not establish visual browser correctness or enjoyment. Automated Windows browser interaction remains unverified.
+Eric playtested the original square game. The subsequent UI/campaign changes need a new human playtest. Mocked UI tests and HTTP tests do not establish visual browser correctness or enjoyment. The visual preview has partial real-browser coverage (small-map rendering, selection and first recruitment); final layout fixes and large-map zoom still need a human check. See docs/validation.md for the exact boundary.
 
 ## Learn the implementation
 
