@@ -98,7 +98,7 @@ fn run() -> i32 uses (input: mut Input, reader: mut Read, writer: mut Write) {
     let difficulty = number()
     let scenario = number()
     let count = number()
-    if !input.ok || version != 3 || scenario > 2 || mode > 3 || difficulty > 1 || count > 240 { return 2 }
+    if !input.ok || version != 4 || scenario > 2 || mode > 3 || difficulty > 1 || count > 240 { return 2 }
     var trace = [pass(); 240]
     var length: usize = count.downcast_unchecked()
     var s = initial(scenario.downcast_unchecked())
@@ -107,7 +107,7 @@ fn run() -> i32 uses (input: mut Input, reader: mut Read, writer: mut Write) {
         let from = number()
         let to = number()
         let amount = number()
-        if !input.ok || kind > 4 || from > 63 || to > 63 || amount > 12 { return 2 }
+        if !input.ok || kind > 8 || from > 63 || to > 63 || amount > 12 { return 2 }
         let action = Action {
             kind: kind.downcast_unchecked(), from: from.downcast_unchecked(),
             to: to.downcast_unchecked(), amount: amount.downcast_unchecked(),
@@ -131,7 +131,7 @@ fn run() -> i32 uses (input: mut Input, reader: mut Read, writer: mut Write) {
     }
 
     out(0)
-    field(3)
+    field(4)
     field(difficulty.downcast_unchecked())
     field(small(length))
     write_char(10)
@@ -183,6 +183,10 @@ fn run() -> i32 uses (input: mut Input, reader: mut Read, writer: mut Write) {
         field(s.settlement[i])
         field(if passable(s, i) { 1 } else { 0 })
         field(if supplied { army_upkeep(s.troops[i]) } else { 0 })
+        let army = army_at(s, i)
+        field(army.infantry)
+        field(army.cavalry)
+        field(army.siege)
         write_char(10)
     }
     let choices = legal(s)
@@ -193,7 +197,7 @@ fn run() -> i32 uses (input: mut Input, reader: mut Read, writer: mut Write) {
         let action = choices.items[i]
         let after = apply(s, action)
         var outcome: i64 = 0
-        if action.kind == 2 { outcome = 4 }
+        if action.kind == 2 || (action.kind >= 5 && action.kind <= 8) { outcome = 4 }
         else if action.kind == 3 { outcome = 5 }
         else if action.kind == 4 { outcome = 6 }
         else if action.kind == 1 {
@@ -216,6 +220,24 @@ fn run() -> i32 uses (input: mut Input, reader: mut Read, writer: mut Write) {
         field(after.settlement[action.to])
         field(after.food[1])
         field(after.food[2])
+        var moving = empty_army()
+        var power: i64 = 0
+        if action.kind == 1 {
+            moving = detachment(army_at(s, action.from), action.amount)
+            if s.owner[action.to] != s.side { power = attack_power(s, action.to, moving) }
+        }
+        let source = army_at(after, action.from)
+        let target = army_at(after, action.to)
+        field(moving.infantry)
+        field(moving.cavalry)
+        field(moving.siege)
+        field(power)
+        field(source.infantry)
+        field(source.cavalry)
+        field(source.siege)
+        field(target.infantry)
+        field(target.cavalry)
+        field(target.siege)
         write_char(10)
     }
     for i in 0 .. length {

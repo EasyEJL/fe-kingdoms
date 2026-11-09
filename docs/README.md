@@ -5,7 +5,7 @@ These documents explain the current project and the reasons behind it. They were
 - [Development workflow](development.md): local Git, launch, tests, files and review boundaries.
 - [Validation baseline](validation.md): what was checked and what still needs playtesting.
 - [Development history](history.md): a short reconstructed pre-Git summary.
-- [Future direction](roadmap.md): medieval Risk and a later hex map, clearly separated from implemented work.
+- [Future direction](roadmap.md): implemented hex campaigns and optional future ideas, clearly separated.
 - [ADR 0001: Fe authority and a thin browser adapter](adr/0001-fe-authority.md).
 - [ADR 0002: Deterministic bounded rules and replay](adr/0002-deterministic-rules-replay.md).
 - [ADR 0003: Explicit two-order turn handoff](adr/0003-explicit-turn-handoff.md).
@@ -17,6 +17,8 @@ These documents explain the current project and the reasons behind it. They were
 
 - [Guided Fe walkthrough](engine-guide.md).
 - [Native protocol](protocol.md).
+
+- [ADR 0007: Mixed troop roles](adr/0007-mixed-troop-roles.md).
 
 ## Maintaining decisions
 

@@ -1,6 +1,6 @@
 use core::marker::Copy
 
-// Crownlines v3. The native Fe engine owns every rule and opponent decision.
+// Crownlines v4. The native Fe engine owns every rule and opponent decision.
 // Fixed capacities bound memory; scenario metadata selects active map cells.
 const MAX_TILES: usize = 64
 const MAX_ACTIONS: usize = 1024
@@ -10,6 +10,8 @@ const RESOURCE_CAP: i64 = 40
 struct State {
     owner: [i64; 64],
     troops: [i64; 64],
+    cavalry: [i64; 64],
+    siege: [i64; 64],
     fort: [i64; 64],
     settlement: [i64; 64],
     gold: [i64; 3],
@@ -22,6 +24,9 @@ struct State {
     passes: i64,
 }
 impl Copy for State {}
+// Infantry is the remainder of total troops after the two specialist counts.
+struct Army { infantry: i64, cavalry: i64, siege: i64 }
+impl Copy for Army {}
 struct Action { kind: i64, from: usize, to: usize, amount: i64 }
 impl Copy for Action {}
 struct Actions { items: [Action; 1024], len: usize }
@@ -125,11 +130,94 @@ fn travel_distance(_ s: State, _ a: usize, _ b: usize) -> i64 {
     best
 }
 
+// ARMY COMPOSITION AND DETERMINISTIC DETACHMENTS
+fn army_at(_ s: State, _ tile: usize) -> Army {
+    Army {
+        infantry: s.troops[tile] - s.cavalry[tile] - s.siege[tile],
+        cavalry: s.cavalry[tile], siege: s.siege[tile],
+    }
+}
+fn army_size(_ army: Army) -> i64 { army.infantry + army.cavalry + army.siege }
+fn empty_army() -> Army { Army { infantry: 0, cavalry: 0, siege: 0 } }
+fn place_army(_ tile: usize, _ army: Army) uses (state: mut State) {
+    state.troops[tile] = army_size(army)
+    state.cavalry[tile] = army.cavalry
+    state.siege[tile] = army.siege
+}
+fn combine_armies(_ a: Army, _ b: Army) -> Army {
+    Army { infantry: a.infantry + b.infantry, cavalry: a.cavalry + b.cavalry, siege: a.siege + b.siege }
+}
+fn subtract_armies(_ a: Army, _ b: Army) -> Army {
+    Army { infantry: a.infantry - b.infantry, cavalry: a.cavalry - b.cavalry, siege: a.siege - b.siege }
+}
+// Reserve one garrison (infantry, then cavalry, then siege). Distribute the
+// requested move proportionally from the mobile pool. Largest remainders win;
+// ties prefer infantry, then cavalry, then siege. No unit changes its type.
+fn detachment(_ army: Army, _ amount: i64) -> Army {
+    let mobile_total = army_size(army) - 1
+    assert(amount > 0 && amount <= mobile_total)
+    var mobile = [army.infantry, army.cavalry, army.siege]
+    if mobile[0] > 0 { mobile[0] -= 1 }
+    else if mobile[1] > 0 { mobile[1] -= 1 }
+    else { mobile[2] -= 1 }
+    var selected = [0; 3]
+    var remainders = [0; 3]
+    var assigned: i64 = 0
+    for role in 0 .. 3 {
+        selected[role] = mobile[role] * amount / mobile_total
+        remainders[role] = mobile[role] * amount % mobile_total
+        assigned += selected[role]
+    }
+    while assigned < amount {
+        var best: usize = 0
+        var largest: i64 = -1
+        for role in 0 .. 3 {
+            if selected[role] < mobile[role] && remainders[role] > largest {
+                best = role
+                largest = remainders[role]
+            }
+        }
+        assert(largest >= 0)
+        selected[best] += 1
+        remainders[best] = -1
+        assigned += 1
+    }
+    Army { infantry: selected[0], cavalry: selected[1], siege: selected[2] }
+}
+// Infantry shields the specialists. This same loss order handles combat,
+// disconnected attrition and food shortages.
+fn lose_troops(_ before: Army, _ casualties: i64) -> Army {
+    var army = before
+    var remaining = casualties
+    let infantry_loss = imin(army.infantry, remaining)
+    army.infantry -= infantry_loss
+    remaining -= infantry_loss
+    let cavalry_loss = imin(army.cavalry, remaining)
+    army.cavalry -= cavalry_loss
+    remaining -= cavalry_loss
+    army.siege -= imin(army.siege, remaining)
+    army
+}
+fn attack_power(_ s: State, _ target: usize, _ army: Army) -> i64 {
+    var strength = army_size(army)
+    let ground = terrain(s, target)
+    if ground == 0 || ground == 1 { strength += army.cavalry }
+    if s.fort[target] > 0 || s.settlement[target] > 0 || ground == 4 {
+        strength += army.siege * 2
+    }
+    strength
+}
+fn capture_losses(_ army: Army, _ power: i64, _ defense_power: i64) -> i64 {
+    let count = army_size(army)
+    // Infantry-only battles reduce to the previous count-minus-defense rule.
+    imin(count - 1, (defense_power * count + power - 1) / power)
+}
+
 // INITIAL STATE AND SUPPLY
 fn initial(_ scenario: usize) -> State {
     assert(scenario <= 2)
     var s = State {
-        owner: [0; 64], troops: [0; 64], fort: [0; 64], settlement: [0; 64],
+        owner: [0; 64], troops: [0; 64], cavalry: [0; 64], siege: [0; 64], fort: [0; 64], settlement: [0; 64],
         gold: [0, 8, 8], food: [0, 12, 12], scenario,
         side: 1, orders: 2, turn: 1, result: 0, passes: 0,
     }
@@ -213,7 +301,10 @@ fn begin_turn(_ before: State) -> State {
     s.gold[player] = imin(RESOURCE_CAP, s.gold[player] + budget.gold_income)
     s.food[player] = imax(0, imin(RESOURCE_CAP, s.food[player] + budget.food_production) - budget.food_upkeep)
     for i in 0 .. tile_count(s) {
-        if s.owner[i] == s.side && !connected[i] { s.troops[i] = imax(1, s.troops[i] - 1) }
+        if s.owner[i] == s.side && !connected[i] && s.troops[i] > 1 {
+            let survivors = lose_troops(army_at(s, i), 1)
+            with (State = s) { place_army(i, survivors) }
+        }
     }
     // Each missing ration removes one mobile troop, strongest armies first.
     // Tie order is mirrored for the two kingdoms to preserve map symmetry.
@@ -229,7 +320,8 @@ fn begin_turn(_ before: State) -> State {
             }
         }
         if chosen == MAX_TILES { break }
-        s.troops[chosen] -= 1
+        let survivors = lose_troops(army_at(s, chosen), 1)
+        with (State = s) { place_army(chosen, survivors) }
         remaining -= 1
     }
     s
@@ -256,6 +348,24 @@ fn legal(_ s: State) -> Actions {
                     if s.gold[player] >= 3 && s.food[player] >= 2 && s.troops[i] <= 10
                         && (terrain(s, i) == 4 || s.settlement[i] > 0) {
                         add(Action { kind: 2, from: i, to: i, amount: 2 })
+                    }
+                    if s.settlement[i] == 2 && s.troops[i] < MAX_TROOPS {
+                        if s.gold[player] >= 4 && s.food[player] >= 2 {
+                            add(Action { kind: 5, from: i, to: i, amount: 1 })
+                        }
+                        if s.gold[player] >= 5 && s.food[player] >= 3 {
+                            add(Action { kind: 6, from: i, to: i, amount: 1 })
+                        }
+                    }
+                    // Training is an explicit paid conversion, useful at the stack cap.
+                    // It never happens implicitly during movement or friendly merging.
+                    if s.settlement[i] == 2 && army_at(s, i).infantry > 0 {
+                        if s.gold[player] >= 4 && s.food[player] >= 2 {
+                            add(Action { kind: 7, from: i, to: i, amount: 1 })
+                        }
+                        if s.gold[player] >= 5 && s.food[player] >= 3 {
+                            add(Action { kind: 8, from: i, to: i, amount: 1 })
+                        }
                     }
                     if s.gold[player] >= 2 && s.fort[i] < 2 {
                         add(Action { kind: 3, from: i, to: i, amount: 1 })
@@ -319,20 +429,33 @@ fn apply(_ before: State, _ action: Action) -> State {
         } else if action.kind == 4 {
             s.gold[player] -= settlement_cost(action.amount)
             s.settlement[action.from] = action.amount
+        } else if action.kind >= 5 && action.kind <= 8 {
+            let cavalry = action.kind == 5 || action.kind == 7
+            s.gold[player] -= if cavalry { 4 } else { 5 }
+            s.food[player] -= if cavalry { 2 } else { 3 }
+            if action.kind < 7 { s.troops[action.from] += 1 }
+            if cavalry { s.cavalry[action.from] += 1 }
+            else { s.siege[action.from] += 1 }
         } else {
-            s.troops[action.from] -= action.amount
+            let moving = detachment(army_at(s, action.from), action.amount)
+            let garrison = subtract_armies(army_at(s, action.from), moving)
+            with (State = s) { place_army(action.from, garrison) }
             if s.owner[action.to] == s.side {
-                s.troops[action.to] += action.amount
+                let combined = combine_armies(army_at(s, action.to), moving)
+                with (State = s) { place_army(action.to, combined) }
             } else {
-                let strength = defense(s, action.to)
-                if action.amount > strength {
+                let defense_power = defense(s, action.to)
+                let power = attack_power(s, action.to, moving)
+                if power > defense_power {
+                    let survivors = lose_troops(moving, capture_losses(moving, power, defense_power))
                     s.owner[action.to] = s.side
-                    s.troops[action.to] = action.amount - strength
+                    with (State = s) { place_army(action.to, survivors) }
                     s.fort[action.to] = 0
                 } else {
-                    let protection = strength - s.troops[action.to]
-                    let casualties = imax(1, action.amount - protection)
-                    s.troops[action.to] = imax(1, s.troops[action.to] - casualties)
+                    let protection = defense_power - s.troops[action.to]
+                    let casualties = imin(s.troops[action.to] - 1, imax(1, power - protection))
+                    let survivors = lose_troops(army_at(s, action.to), casualties)
+                    with (State = s) { place_army(action.to, survivors) }
                 }
             }
         }
@@ -369,16 +492,32 @@ fn evaluate(_ s: State, _ root: i64) -> i64 {
             let connected = if sign == 1 { own_supply[i] } else { enemy_supply[i] }
             let enemy_capital = capital(s, 3 - s.owner[i])
             let distance = travel_distance(s, i, enemy_capital)
-            score += sign * (24 + s.troops[i] * 12 + s.fort[i] * 4)
+            score += sign * (24 + s.troops[i] * 12 + s.fort[i] * 4 + s.cavalry[i] * 8 + s.siege[i] * 12)
             if connected {
                 score += sign * (10 + s.settlement[i] * 18)
                 if terrain(s, i) == 1 { score += sign * 26 }
             } else { score -= sign * (16 + s.troops[i] * 2) }
+            var nearby_siege_target = false
+            for direction in 0 .. 6 {
+                let target = neighbor(s, i, direction)
+                if target < tile_count(s) && passable(s, target) && s.owner[target] != s.owner[i]
+                    && (s.fort[target] > 0 || s.settlement[target] > 0 || terrain(s, target) == 4) {
+                    nearby_siege_target = true
+                }
+            }
+            // Reward a useful siege train at a real defended frontier, but cap the
+            // purpose bonus so the opponent does not blindly buy siege-only armies.
+            if nearby_siege_target { score += sign * imin(s.siege[i], 3) * 20 }
             if terrain(s, i) == 7 { score += sign * 18 }
             if s.troops[i] > 1 { score += sign * ((span - distance) * s.troops[i]) }
             if adjacent(s, i, enemy_capital) {
                 score += sign * s.troops[i] * 5
-                if s.troops[i] - 1 > defense(s, enemy_capital) { score += sign * 300 }
+                if s.troops[i] > 1 {
+                    let attackers = detachment(army_at(s, i), s.troops[i] - 1)
+                    if attack_power(s, enemy_capital, attackers) > defense(s, enemy_capital) {
+                        score += sign * 300
+                    }
+                }
             }
         }
     }

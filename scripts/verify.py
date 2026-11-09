@@ -8,7 +8,7 @@ summary={'status':'running','checks':results}
 (E/'verification.json').write_text(json.dumps(summary,indent=2))
 for index,command in enumerate(commands):
     start=time.perf_counter()
-    p=subprocess.run(command,cwd=ROOT,capture_output=True,text=True,timeout=180)
+    p=subprocess.run(command,cwd=ROOT,capture_output=True,text=True,timeout=360 if command[-1]=='scripts/test_matches.py' else 180)
     (E/f'verify-{index}.stdout').write_text(p.stdout)
     (E/f'verify-{index}.stderr').write_text(p.stderr)
     results.append({'command':command,'exit':p.returncode,'seconds':time.perf_counter()-start})

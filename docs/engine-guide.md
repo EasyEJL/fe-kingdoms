@@ -1,6 +1,6 @@
 # A guided tour of the Fe engine
 
-This guide describes the **version 3 campaign engine**. Start with the ideas below, then follow the named functions. You do not need to understand every Fe language feature before understanding the game. If a later version adds troop roles, read its decision record alongside this guide.
+This guide describes the **version 4 mixed-army campaign engine**. Start with the ideas below, then follow the named functions. You do not need to understand every Fe language feature before understanding the game. Read the decision records alongside this guide for why the rules evolved; this is a tour of the current implementation, not a claim that balance work is finished.
 
 ## 1. The useful mental model
 
@@ -29,9 +29,9 @@ Each request reconstructs state from orders. The HTTP process does not hold a hi
 
 Start with `State`, `Action` and `Actions` in `src/engine.fe`.
 
-- `State` holds tile ownership, troops, forts and settlements; both kingdoms' gold/food; and scenario/turn information.
+- `State` holds tile ownership, total troops, cavalry, siege, forts and settlements; both kingdoms' gold/food; and scenario/turn information.
 - Arrays have fixed capacities: 64 tile slots and 1,024 legal actions. `tile_count` selects the active cells; the largest current map uses 45.
-- `Action` has `kind`, `from`, `to`, `amount`. Kinds 0..4 mean pass, move, recruit, fortify and build/upgrade settlement.
+- `Action` has `kind`, `from`, `to`, `amount`. Kinds 0..4 mean pass, move, recruit infantry, fortify and build/upgrade settlement. Kinds 5/6 recruit cavalry/siege; kinds 7/8 explicitly train one existing infantry into cavalry/siege.
 - `Actions.len` marks how much of its fixed array is populated.
 
 A few Fe features used here:
@@ -42,7 +42,7 @@ A few Fe features used here:
 - `usize` is used for indexes; `i64` for game quantities and scores.
 - Parameters such as `_ s: State` are called positionally: `apply(s, action)`.
 
-Most functions receive their inputs explicitly. A few use Fe capabilities: `add` declares `uses (list: mut Actions)`, supplied by `with (Actions = result)`. Search similarly receives its mutable `Search` counter. Native I/O declares reader/writer capabilities. These are explicit dependencies, not hidden global game state.
+Most functions receive their inputs explicitly. A few use Fe capabilities: `add` declares `uses (list: mut Actions)`, supplied by `with (Actions = result)`. `place_army` declares `uses (state: mut State)`: callers supply their local position with `with (State = s)`. It updates total troops and both specialist counts together. Search similarly receives its mutable `Search` counter. Native I/O declares reader/writer capabilities. These are explicit dependencies, not hidden global game state.
 
 ## 4. Real hex geometry
 
@@ -60,7 +60,21 @@ Read `legal`, then `is_legal`.
 
 `legal` checks ownership, supply, resources, settlement requirements, stack limits, passability and adjacency. It offers half-stack and all-but-one moves where allowed. `is_legal` requires a submitted order to exactly match that list.
 
+Specialists require a supplied town (settlement level 2). Recruiting cavalry costs 4 gold and 2 food; siege costs 5 gold and 3 food. Recruitment adds one troop and needs room below the 12-troop cap. Training costs the same resources and an order but converts one existing infantry, preserving total headcount. It is available at the cap, but requires infantry to convert. Neither movement nor friendly merging silently changes troop types.
+
 `apply` assumes prior validation, or an action selected directly from `legal`. It is not a public apply-any-integers function. Both the replay loop and AI respect this boundary. The browser can safely group buttons by territory because it filters an Fe-generated list instead of recreating legal-move rules.
+
+## Army composition: read this before combat
+
+`Army` is a small copyable value with infantry, cavalry and siege counts. `State.troops` remains the total; `army_at` derives infantry by subtracting the two specialist counts. `army_size` totals an `Army`, and `place_army` writes it back consistently. `combine_armies` and `subtract_armies` keep friendly merging and departures explicit.
+
+`detachment` decides which troops move. First reserve one garrison, preferring infantry, then cavalry, then siege. From the remaining mobile pool, assign the requested number proportionally: integer division gives initial counts, then largest remainders receive the unassigned places. Ties prefer infantry, cavalry, siege in that order. Moving half a mixed army therefore preserves real unit types; it does not turn the moving troops into whichever role is convenient.
+
+`attack_power` starts with the number of attackers. Cavalry adds strength on plains and farms. Siege adds strength against a fortified tile, settlement or capital. Defense still combines defender count, fort level and hill/pass protection. A strictly stronger attack captures; a tie does not.
+
+`capture_losses` converts defense into casualties proportional to attacking headcount and power, rounded up and capped to leave a survivor after a successful capture. `lose_troops` removes infantry first, then cavalry, then siege. The same casualty order serves combat, isolation and food shortages. A repelled detachment is lost; the defenders suffer damage but retain at least one troop.
+
+A conceptual forecast to follow in code: send a mixed infantry/cavalry detachment onto a farm and inspect its cavalry bonus; compare a mixed infantry/siege attack on a fortified settlement and inspect its siege bonus. These are role examples, not a fabricated transcript of a played battle. In `src/native.fe`, each forecast includes the selected detachment, attack power and resulting source/target composition. The preview's survivors come from `apply`, so the UI does not independently simulate combat.
 
 ## 6. One order, then the economy
 
@@ -84,7 +98,7 @@ The native forecast loop calls `apply(s, action)` for every legal action and rep
 
 Read `evaluate`, `ranked`, `search`, then `choose`.
 
-`evaluate` scores a position from one kingdom's perspective: victory first, then resources, territory, troops, forts, supply, settlements, farms, passes, advancement, threats and food shortages. These weights are strategy heuristics, not extra rules or resources.
+`evaluate` scores a position from one kingdom's perspective: victory first, then resources, territory, troops, specialist value and nearby siege targets, forts, supply, settlements, farms, passes, advancement, threats and food shortages. These weights are strategy heuristics, not extra rules or resources.
 
 `ranked` tries legal actions with `apply` and sorts their scores. Easy takes the top one-ply result. It is short-sighted but still takes an obvious win.
 
@@ -94,9 +108,9 @@ Beam limits keep work bounded but do not guarantee optimal play. Stable ordering
 
 ## 8. Native boundaries and tests
 
-The parser in `src/native.fe` rejects malformed numbers, overflow, extra fields, inputs over 16,384 bytes and traces over 240 actions. Version 3 has a scenario field. Browser modes are 1 (replay only) and 0 (computer response); headless modes 2 and 3 support full self-play and one Fe-selected action.
+The parser in `src/native.fe` rejects malformed numbers, overflow, extra fields, inputs over 16,384 bytes and traces over 240 actions. Version 4 retains the scenario field and adds army composition to tile and forecast output. Browser modes are 1 (replay only) and 0 (computer response); headless modes 2 and 3 support full self-play and one Fe-selected action.
 
-The host routes older versions to frozen read-only replay executables, so old actions are not silently given new movement or economy semantics.
+The host routes versions 1, 2 and 3 to frozen read-only replay executables, so old actions are not silently given new movement or economy semantics.
 
 `scripts/build.py` verifies the compiler hash, concatenates unchanged Fe source and calls `fe build --backend native`. It does not translate host-language game logic. `scripts/test_fe.py` combines the engine and `src/tests.fe` and runs native Fe tests. Broader verification adds transport, replay, full matches and UI units.
 
@@ -106,12 +120,20 @@ Read these tests first:
 - `supply_cut_stops_income_and_causes_attrition`: territory affects economy.
 - `food_shortage_forecast_equals_actual_losses`: forecast versus transition.
 - `both_difficulties_take_capital_wins`: a tactical AI obligation.
+- `every_bounded_composition_detaches_and_merges_exactly`: enumerates every infantry/cavalry/siege composition of total size 2 through 12 and every possible detachment size. It checks conservation, nonnegative counts, reserved garrisons and determinism, plus one exact proportional split.
+- `specialist_recruitment_and_training_are_explicit_paid_orders`: town requirements, costs and training at the stack cap.
+- `role_power_depends_on_target_and_infantry_combat_is_unchanged` and `mixed_capture_repel_merge_and_losses_preserve_roles`: target-dependent strength and composition after battle/merging.
+- `attrition_and_hunger_use_the_same_casualty_priority`: loss ordering and isolated specialist garrisons.
+- `full_frontline_can_train_and_breach_the_fortified_pass`: both policies select siege training at a full frontier town; after the fixture builds its siege force, both select the breaching assault. This is a focused tactical fixture, not an unattended campaign proving the AI plans the entire sequence.
+- `both_policies_take_specialist_capital_wins`: both difficulties recognize a specialist-enabled finishing attack.
+
+This is bounded invariant and tactical coverage, not exhaustive game-tree coverage or proof of campaign balance. Test results belong in the current verification report rather than being assumed from the existence of these tests.
 
 Native/HTTP tests and mocked UI tests do not establish visual browser correctness or enjoyment. Keep actual browser checks and human playtests separate.
 
 ## Three small exercises
 
-Use the existing built v3 executable from the project directory. These fresh headless positions do not alter a browser match or its saves.
+Use the current built v4 executable from the project directory. These fresh headless positions do not alter a browser match or its saves.
 
 ```powershell
 $p = (Get-Location).Path
@@ -121,15 +143,15 @@ $image = 'sha256:32e644f1599ac63427a9e545d643ad75adee6f14328c4b7d1be01e3bf728391
 ### 1. Find the initial state
 
 ```powershell
-'3 1 0 0 0' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
+'4 1 0 0 0' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
 ```
 
-The header means version 3, replay-only, Easy, small scenario, zero actions. Find tag 1 for turn/resources, tag 6 for map metadata, tag 7 for economy and tag 3 for legal actions. Compare with `initial(0)` and `economy`.
+The header means version 4, replay-only, Easy, small scenario, zero actions. Find tag 1 for turn/resources, tag 6 for map metadata, tag 7 for economy and tag 3 for legal actions. Compare with `initial(0)` and `economy`.
 
 ### 2. Separate your orders from Red's response
 
 ```powershell
-'3 1 0 0 2  2 5 5 2  1 5 6 2' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
+'4 1 0 0 2  2 5 5 2  1 5 6 2' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
 ```
 
 Tile 5 is A2 on the small map. This recruits there, then sends two troops to B2, spending both orders. Tag 1 shows Red to move; the accepted trace still has exactly two actions. Change only the header's second field from 1 to 0 and rerun: Fe adds Red's response. Follow the relevant branches in `run` and `apply`.

@@ -1,6 +1,6 @@
 # Fe Kingdoms
 
-A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current source milestone is **rules version 3: hex campaigns**. The browser and Python adapter only display and transport Fe results.
+A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current source milestone is **rules version 4: hex campaigns and mixed armies**. The browser and Python adapter only display and transport Fe results.
 
 ## Play and verify
 
@@ -26,24 +26,26 @@ On the small map, try selecting A2, recruiting two troops, then moving two from 
 ## Campaign rules
 
 - Three deterministic axial hex maps: 5x3, 7x5 and 9x5. Movement follows up to six shared edges. Mountain ridges are impassable; passes provide chokepoints and a defense bonus.
-- Move half a stack or all but one troop. Friendly stacks combine, up to twelve. One troop remains behind.
+- Move half a stack or all but one unit. Friendly stacks combine without converting unit types, up to twelve. One garrison remains behind; Fe previews the exact infantry/cavalry/siege detachment.
 - Both sides start with eight gold and twelve food, capped at forty each. Recruit two troops for three gold and two food at a supplied capital or settlement.
 - Build a village for six gold; upgrade to a town for eight. Both use one order. Supplied villages/towns produce one/two gold each turn. Fortifying costs two gold, with a maximum of two levels.
 - Supply follows connected owned hexes to the capital. At the incoming turn, gain base two gold plus connected settlement levels, and base three food plus two per connected farm. Each connected army pays ceil((troops minus one)/3) food; lone garrisons are free. Storage is capped before upkeep.
 - Disconnected stacks lose one mobile troop and do not pay global food upkeep. Food shortages remove mobile troops from the largest armies deterministically, never eliminating lone garrisons. The display uses Fe's exact projected stock and shortage forecast for an unchanged board.
-- Defense is troops plus fort, plus one on hills/passes. An attack must strictly exceed defense to capture. Otherwise the attack is repelled. Exact losses are shown in Fe's forecast.
+- Infantry attacks/defends at one. Cavalry adds one attack power on plain/farm targets. Siege adds two attack power against forts, settlements or capitals. All units defend at one; forts and hills/passes add defense. Attack power must strictly exceed defense. Fe shows exact casualties and remaining composition before each order.
+- Supplied towns recruit one cavalry for four gold/two food or one siege for five gold/three food. They can also train one existing infantry into that specialist at the same cost, keeping total units unchanged. This explicit paid training works at the stack cap.
+- Moving detachments are proportional after reserving a garrison. Casualties remove infantry first, then cavalry, then siege. The rules remain deterministic; no random combat or hidden bonuses.
 - Capture the enemy capital for immediate victory. Four consecutive pass actions or completion of 120 side turns draws the match.
 - Easy uses one-ply greedy evaluation; Hard uses bounded four-ply beam alpha-beta search. Their rules and resources are identical, without hidden bonuses.
 
 ## Saves and compatibility
 
-Save replay exports the accepted action sequence, version, scenario and difficulty. Fe validates every recorded action when loading. Version-1 square saves and version-2 basic-hex saves load through frozen engines **read-only**. They are never silently migrated. Each rules version has a separate browser checkpoint. Export replays to keep multiple games.
+Save replay exports the accepted action sequence, version, scenario and difficulty. Fe validates every recorded action when loading. Version-1 square saves, version-2 basic-hex saves and version-3 infantry-campaign saves load through frozen engines **read-only**. They are never silently migrated. Each rules version has a separate browser checkpoint; loading an old replay does not replace the current one. Export replays to keep multiple games.
 
 ## Current verification and balance limits
 
 The campaign milestone has directed Fe tests for maps, routes, economy, supply, settlements, bounds and opponent determinism, plus adapter/UI/replay/full-match checks. See `docs/validation.md` and the latest generated evidence for actual results.
 
-Self-play exposed defensive stalls: a fortified pass can have defense fifteen while an infantry attack sends at most eleven. Most v3 regression pairings draw, although one small Hard-versus-Easy pairing captures a capital. Specialist siege roles are the next separate milestone; this version is not presented as broadly balanced.
+The v3 campaign exposed defensive stalls: fortified passes could exceed the largest infantry attack. V4 provides explicit siege recruitment/training and mixed-army attacks. Both policies pass tactical tests for training and breaching a full fortified frontier. This does not guarantee every bot match becomes decisive. Human-versus-computer is the intended use; draw triggers are unchanged. A fresh human playtest is needed to assess enjoyment and difficulty.
 
 Eric playtested the original square game. The subsequent UI/campaign changes need a new human playtest. Mocked UI tests and HTTP tests do not establish visual browser correctness or enjoyment. Automated Windows browser interaction remains unverified.
 

@@ -5,8 +5,8 @@ The user wants medieval Risk with meaningful resource management and little book
 ## Milestones
 
 1. **Implemented and committed:** true axial hex topology, matching layout, one-open owned-territory action cards, explicit turn handoff, Fe forecasts and preserved older replays. See ADR 0005 and commit bd40373.
-2. **Implemented and tested, with defensive-stall limits:** strategic ridges/passes, villages/towns, food and capital-connected supply, and three map sizes. See ADR 0006. Integrated tests pass, but most self-play pairings draw. Keep the previous playable instance available while siege roles are tested.
-3. **Design only:** distinct troop roles. Evaluate a small roster with clear terrain/fortification tradeoffs, explicit composition and Fe forecasts. Do not silently convert units when merging armies or add hidden computer bonuses.
+2. **Implemented and tested, with defensive-stall limits:** strategic ridges/passes, villages/towns, food and capital-connected supply, and three map sizes. See ADR 0006 and commit ef898df. Most self-play pairings still draw; this is a balance limitation, not a rule failure.
+3. **Implemented and verified:** infantry/cavalry/siege roles, explicit composition, paid town training and Fe forecasts. See ADR 0007. No silent conversion or hidden bonuses. The complete regression suite passes. Hard self-play uses specialists; Easy does not reliably develop them. Human feedback must determine how well the roster plays.
 
 ## After implementation
 

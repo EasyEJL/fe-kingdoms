@@ -10,7 +10,7 @@
 <div class="toolbar">
 <label for="scenario">Map</label><select id="scenario"><option value="0">Small 5 x 3</option><option value="1">Medium 7 x 5</option><option value="2">Large 9 x 5</option></select>
 <label for="difficulty">Computer</label><select id="difficulty"><option value="0">Easy</option><option value="1">Hard</option></select>
-<button id="new">New game</button><button id="save" disabled>Save replay</button><button id="load">Load replay</button><button id="resume">Resume campaign</button><button id="previous" hidden>View v2 hex replay</button><button id="legacy" hidden>View v1 square replay</button>
+<button id="new">New game</button><button id="save" disabled>Save replay</button><button id="load">Load replay</button><button id="resume">Resume campaign</button><button id="campaign" hidden>View v3 campaign replay</button><button id="previous" hidden>View v2 hex replay</button><button id="legacy" hidden>View v1 square replay</button>
 <input class="file" id="file" type="file" accept=".json,application/json">
 </div>
 <div id="notice" role="status" aria-live="polite"></div>
@@ -21,15 +21,15 @@
 <section><div class="map-scroll"><div id="board" class="board" aria-label="Kingdom map"></div></div><p class="legend"><span class="blue-text">Blue: you</span> · <span class="red-text">Red: computer</span> · Cream: neutral<br>CUT OFF marks territory disconnected from its capital. Numbers are troops. Hexes share up to six neighboring edges. Mountains block movement and supply; passes cross the ridge. Select a hex for settlement and upkeep details.</p><div id="search" class="muted"></div></section>
 <aside class="panel"><h2 id="action-title">Your territories</h2><p id="selection-help" class="muted">Open one territory below or select it on the map.</p><p id="territory-detail" class="muted"></p><div id="global-actions" class="global-orders"></div><div id="actions"></div></aside>
 </div>
-<details><summary>Full rules and strategy basics</summary><ul>
+<details><summary>Current v4 rules and strategy basics</summary><ul>
 <li>You command Blue. Each side takes two orders per turn. Select a territory, then choose an order supplied by Fe. These are two orders TOTAL across your kingdom, not per territory. Selecting tiles is free. End my turn forfeits your remaining orders. After your second order or End my turn, press Run computer turn to let Red act.</li>
-<li>Move either half your troops (rounded down) or all but one to an edge-adjacent hex (up to six neighbors). Friendly territories combine troops, up to 12. Every territory retains at least one troop.</li>
-<li>Recruit 2 troops for 3 gold and 2 food at a supplied capital, village or town. Fortify for 2 gold (maximum fort level 2). Build a village for 6 gold, then upgrade it to a town for 8 gold; each costs one order. Only orders allowed by Fe are shown.</li>
-<li>Defense is troops + fort level + 1 on hills or passes. An attack must exceed defense to conquer; survivors equal attackers minus defense, and captured forts are removed. Otherwise all attackers are lost, while defenders lose max(1, attackers - fort level - terrain bonus), with at least one defender surviving.</li>
+<li>Move either half your troops (rounded down) or all but one to an edge-adjacent hex (up to six neighbors). Friendly territories combine troops and preserve their composition, up to 12 total. Fe reserves one garrison (infantry first, otherwise cavalry, otherwise siege) and chooses the moving composition proportionally from the rest; inspect the forecast before committing. Every territory retains at least one troop.</li>
+<li>Recruit 2 infantry for 3 gold and 2 food at a supplied capital, village or town. Supplied towns can recruit cavalry (1 for 4 gold and 2 food) or siege (1 for 5 gold and 3 food). A supplied town with at least one infantry can also Train it into cavalry or siege for the same cost and one order. Training converts the infantry and leaves the total troop count unchanged, including in a full stack. Fortify for 2 gold (maximum fort level 2). Build a village for 6 gold, then upgrade it to a town for 8 gold; each costs one order. Only orders allowed by Fe are shown.</li>
+<li>All units have base attack and defense strength 1. Each cavalry adds 1 attack on plains or farms, and each siege adds 2 attack against a fort, settlement or capital. Fe calculates attack power, defense, survivors and both resulting compositions in the forecast. An attack must exceed defense to capture. On capture, attacker losses are ceiling(defense * committed troop count / attack power), capped so at least one attacker survives. On a repelled attack, all attackers die; defenders lose max(1, attack power minus fort and terrain bonus), with at least one defender surviving. Losses remove infantry first, then cavalry, then siege, including attrition. Captured forts are removed. Use the displayed result rather than assuming troop count equals attack power.</li>
 <li>Supply follows owned passable hexes to your capital. Mountains block it. At the start of your turn, gain 2 gold plus the level of each supplied settlement, and 3 food plus 2 for each supplied farm. Gold and food are capped at 40. Food production is added and capped BEFORE upkeep is paid, so some production can be wasted at full storage. The projected food amount above comes directly from Fe. Villages are level 1 and towns level 2.</li><li>Supplied armies consume food for mobile troops: one food per started group of three troops above the lone garrison. Fe shows production, upkeep, net food and projected shortage losses above the map. A food shortage removes mobile troops from the largest armies. Cut-off territories instead lose one troop, to a minimum of one; they do not consume your central food.</li>
 <li>Capture the enemy capital to win immediately. Four consecutive end-turn orders, or completing 120 side turns, ends the match in a draw. Small, medium and large maps use the same two-order budget and visible rules. Any non-pass order resets the consecutive-pass count.</li>
 <li>Easy uses greedy one-ply evaluation. Hard uses four-ply beam alpha-beta search. Both use identical rules and resources, with no hidden bonuses. Select difficulty before a new game.</li>
-<li>New games use campaign rules version 3. Version 1 square and version 2 hex replays can be viewed read-only and are never silently converted. Save replay downloads the full deterministic move record. Load replay validates it with Fe. A local checkpoint is saved only after a successful response. Export a replay before replacing a game if you want to keep it.</li>
+<li>New games use troop-role campaign rules version 4. Version 1 square, version 2 hex and version 3 campaign replays can be viewed read-only and are never silently converted. Save replay downloads the full deterministic move record. Load replay validates it with Fe. A local checkpoint is saved only after a successful response. Export a replay before replacing a game if you want to keep it.</li>
 </ul></details>
 <details><summary>Recent orders</summary><div id="log"></div></details>
 <script>
@@ -39,13 +39,16 @@ const terrain=['Plain','Farm','Town','Hill','Capital','Mountain','Terrain 6','Pa
 const settlementNames=['None','Village','Town'];
 const names=['Neutral','Blue','Red'];
 let game=null, selected=null, busy=false;
-const CURRENT_VERSION=3, CHECKPOINT='fe-kingdoms-v3', PREVIOUS_CHECKPOINT='fe-kingdoms-v2', LEGACY_CHECKPOINT='fe-kingdoms-v1';
+const CURRENT_VERSION=4, CHECKPOINT='fe-kingdoms-v4', CAMPAIGN_CHECKPOINT='fe-kingdoms-v3', PREVIOUS_CHECKPOINT='fe-kingdoms-v2', LEGACY_CHECKPOINT='fe-kingdoms-v1';
 function mapInfo(){return game&&game.map||{width:5,height:3,count:15,topology:game&&game.version===1?0:1,scenario:0,blueCapital:0,redCapital:14,orderBudget:2,maxTurns:120};}
 const place=i=>String.fromCharCode(65+i%mapInfo().width)+(Math.floor(i/mapInfo().width)+1);
+const rulesLabel=v=>v===1?'square':v===2?'hex':'campaign';
+const composition=(infantry,cavalry,siege)=>'Infantry '+infantry+', cavalry '+cavalry+', siege '+siege;
+const tileComposition=t=>t.infantry===undefined?'':composition(t.infantry,t.cavalry,t.siege);
 const readOnly=()=>!!game&&game.version!==CURRENT_VERSION;
 function payload(mode,actions){return {version:game.version,scenario:game.map?.scenario??0,mode,difficulty:game.difficulty,actions};}
-const actionName=a=>a[0]===0?'End turn':a[0]===1?'Move '+a[3]+' troops: '+place(a[1])+' -> '+place(a[2]):a[0]===2?'Recruit +2 troops at '+place(a[1]):a[0]===3?'Fortify '+place(a[1]):a[0]===4?(a[3]===1?'Build village at ':'Upgrade to town at ')+place(a[1]):'Unknown order';
-function forecast(a,p,done=false){
+const actionName=a=>a[0]===0?'End turn':a[0]===1?'Move '+a[3]+' troops: '+place(a[1])+' -> '+place(a[2]):a[0]===2?'Recruit +2 '+(game&&game.version>=4?'infantry':'troops')+' at '+place(a[1]):a[0]===3?'Fortify '+place(a[1]):a[0]===4?(a[3]===1?'Build village at ':'Upgrade to town at ')+place(a[1]):a[0]===5?'Recruit +1 cavalry at '+place(a[1]):a[0]===6?'Recruit +1 siege at '+place(a[1]):a[0]===7?'Train 1 infantry -> cavalry at '+place(a[1]):a[0]===8?'Train 1 infantry -> siege at '+place(a[1]):'Unknown order';
+function forecastText(a,p,done=false){
  if(!p)return 'Fe will validate this order.';
  if(p.result===3)return done?'Match ended in a draw. No further turns.':'Ends the match in a draw. No further turns.';
  if(p.result===1)return done?'You captured Red capital '+place(mapInfo().redCapital)+' and won the match.':'Captures Red capital '+place(mapInfo().redCapital)+' and wins the match immediately.';
@@ -54,10 +57,21 @@ function forecast(a,p,done=false){
  if(p.outcome===1)return (done?'Moved':'Would move')+' to '+place(a[2])+': '+p.targetTroops+' troops there, '+p.sourceTroops+' left at '+place(a[1])+'.';
  if(p.outcome===2)return (done?'Captured':'Would capture')+' '+place(a[2])+' with '+p.targetTroops+' survivors. Defense '+p.defense+'; '+p.sourceTroops+' left behind.';
  if(p.outcome===3)return 'Attack '+(done?'failed':'will fail')+': all '+a[3]+' attackers lost. '+p.targetTroops+' defenders remain (defense '+p.defense+').';
- if(p.outcome===4)return p.cost+' gold'+(p.foodCost!==undefined?', '+p.foodCost+' food':'')+'. '+(done?'Now':'Would have')+' '+p.targetTroops+' troops at '+place(a[1])+'.';
+ if(p.outcome===4)return (a[0]===7||a[0]===8?(done?'Converted':'Converts')+' 1 infantry into '+(a[0]===7?'cavalry':'siege')+'. ':'')+p.cost+' gold'+(p.foodCost!==undefined?', '+p.foodCost+' food':'')+'. '+(done?'Now':'Would have')+' '+p.targetTroops+' troops at '+place(a[1])+'.';
  if(p.outcome===5)return p.cost+' gold. '+(done?'Added':'Adds')+' 1 fort level to this territory.';
  if(p.outcome===6)return p.cost+' gold'+(p.foodCost?', '+p.foodCost+' food':'')+'. '+(done?'Settlement is now ':'Would become ')+(settlementNames[p.settlementAfter]??('level '+p.settlementAfter))+'.';
  return '';
+}
+function forecast(a,p,done=false){
+ let text=forecastText(a,p,done);
+ if(!p)return text;
+ if(a[0]===1&&p.movingInfantry!==undefined){
+  text+=' '+(done?'Sent':'Moving force')+': '+composition(p.movingInfantry,p.movingCavalry,p.movingSiege)+'.';
+  if(p.outcome!==1&&p.attackPower!==undefined)text+=' Attack power: '+p.attackPower+'.';
+  text+=' Source after: '+composition(p.sourceInfantry,p.sourceCavalry,p.sourceSiege)+'.';
+ }
+ if(p.targetInfantry!==undefined&&a[0]!==0)text+=' Target after: '+composition(p.targetInfantry,p.targetCavalry,p.targetSiege)+'.';
+ return text;
 }
 function checkpoint(){if(readOnly())return;try{localStorage.setItem(CHECKPOINT,JSON.stringify(replay()));}catch{}}
 function replay(){return {version:game.version,scenario:game.map?.scenario??0,difficulty:game.difficulty,actions:game.actions};}
@@ -76,8 +90,8 @@ function render(){
  $('goal').textContent='Capture Red capital '+place(m.redCapital)+'. Keep your capital '+place(m.blueCapital)+' safe.';
  const ending=['','You win: Red capital '+place(m.redCapital)+' has fallen.','Red wins: your capital '+place(m.blueCapital)+' has fallen.','Draw: neither kingdom won.'];
  const turn=s.side===1?'Your turn: '+s.orders+' of '+budget+' orders remaining':'Red turn: waiting for Run computer turn';
- $('status').textContent=(legacy?'Legacy v'+game.version+' '+(m.topology===1?'hex':'square')+' replay (read-only) | ':'')+(s.result?ending[s.result]:turn)+' | Round '+Math.ceil(s.turn/2)+' | Gold: you '+s.gold1+', Red '+s.gold2;
- $('turn-guide').textContent=legacy?'This version '+game.version+' replay uses its original '+(m.topology===1?'hex':'square')+' rules. You can inspect or export it. Start a new campaign to play.':s.result?'Match complete. Save the replay or start again.':s.side===2?'Your turn is finished. Review the board, then press Run computer turn. Red gets up to '+budget+' orders.':s.orders===1?'1 order remains across your WHOLE kingdom. Red has not moved. Use another order, or end your turn early.':'You have '+budget+' orders TOTAL across your whole kingdom. You can use the same territory twice. Selecting a hex costs no order.';
+ $('status').textContent=(legacy?'Legacy v'+game.version+' '+rulesLabel(game.version)+' replay (read-only) | ':'')+(s.result?ending[s.result]:turn)+' | Round '+Math.ceil(s.turn/2)+' | Gold: you '+s.gold1+', Red '+s.gold2;
+ $('turn-guide').textContent=legacy?'This version '+game.version+' replay uses its original '+rulesLabel(game.version)+' rules. You can inspect or export it. Start a new campaign to play.':s.result?'Match complete. Save the replay or start again.':s.side===2?'Your turn is finished. Review the board, then press Run computer turn. Red gets up to '+budget+' orders.':s.orders===1?'1 order remains across your WHOLE kingdom. Red has not moved. Use another order, or end your turn early.':'You have '+budget+' orders TOTAL across your whole kingdom. You can use the same territory twice. Selecting a hex costs no order.';
  $('opening-hint').textContent=!legacy&&game.actions.length===0&&m.scenario===0?'Open village A2 below (free), recruit +2 troops for 3 gold and 2 food (order 1), then send 2 troops from A2 to B2 (order 2). Those are your TWO orders.':'';
  $('economy').replaceChildren();
  for(const e of game.economy||[]){
@@ -104,7 +118,7 @@ function render(){
  }
  const tile=game.tiles.find(t=>t.index===selected);
  $('selection-help').textContent=!tile?'Open any owned territory below. Only one is expanded at a time.':tile.owner!==1?place(tile.index)+' belongs to '+names[tile.owner]+'. Open a blue territory to see its legal moves and attacks.':place(tile.index)+': '+tile.troops+' troops, fort '+tile.fort+'. '+(tile.supplied?'Supplied.':'Cut off from your capital.')+' Every listed order is generated by Fe.';
- $('territory-detail').textContent=!tile?'':(tile.passable===0||tile.passable===false)?'Mountain: impassable to armies and supply. Find a pass through the ridge.':place(tile.index)+' | '+terrain[tile.terrain]+(tile.settlement!==undefined?' | Settlement: '+(settlementNames[tile.settlement]??tile.settlement):'')+(tile.upkeep!==undefined?' | Food upkeep: '+tile.upkeep+' per turn':'')+(tile.terrain===4?' | Capital: can recruit when supplied.':tile.settlement>0?' | Settlement: can recruit when supplied.':tile.owner===1?' | Recruiting requires a capital or settlement. Build a village here if that order is available.':'')+'.';
+ $('territory-detail').textContent=!tile?'':(tile.passable===0||tile.passable===false)?'Mountain: impassable to armies and supply. Find a pass through the ridge.':place(tile.index)+' | '+terrain[tile.terrain]+(tile.settlement!==undefined?' | Settlement: '+(settlementNames[tile.settlement]??tile.settlement):'')+(tile.upkeep!==undefined?' | Food upkeep: '+tile.upkeep+' per turn':'')+(tileComposition(tile)?' | '+tileComposition(tile):'')+(tile.terrain===4?' | Capital: can recruit when supplied.':tile.settlement>0?' | Settlement: can recruit when supplied.':tile.owner===1?' | Recruiting requires a capital or settlement. Build a village here if that order is available.':'')+'.';
  $('actions').replaceChildren();$('global-actions').replaceChildren();
  if(legacy||s.result){const p=document.createElement('p');p.className=legacy?'legacy-note':'';p.textContent=legacy?'Read-only legacy replay. Start New game for the current campaign rules.':'Match complete. Start again or save this replay.';$('global-actions').append(p);}
  else if(s.side!==1){const b=document.createElement('button');b.className='computer-turn';b.textContent='Run computer turn';b.onclick=()=>request(payload(0,game.actions));$('global-actions').append(b);}
@@ -113,6 +127,7 @@ function render(){
   const open=selected===owned.index,card=document.createElement('div');card.className='territory'+(open?' open':'');
   const heading=document.createElement('button');heading.className='territory-heading';heading.setAttribute('aria-expanded',String(open));heading.textContent=(open?'[-] ':'[+] ')+place(owned.index)+' | '+terrain[owned.terrain]+' | '+owned.troops+' troops';heading.onclick=()=>selectTerritory(owned.index);card.append(heading);
   if(open){const body=document.createElement('div');body.className='territory-orders';let count=0;
+   if(tileComposition(owned)){const units=document.createElement('p');units.className='muted unit-composition';units.textContent=tileComposition(owned);body.append(units);}
    if(!legacy&&!s.result&&s.side===1)game.legal.forEach((a,index)=>{if(a[0]!==0&&a[1]===owned.index){body.append(actionButton(a,index));count++;}});
    if(!count){const p=document.createElement('p');p.className='muted';p.textContent=legacy?'Legacy replay: orders are disabled.':s.result?'Match complete.':s.side!==1?'Waiting for the computer turn.':'No legal orders here right now. Try another territory.';body.append(p);}card.append(body);
   }
@@ -149,7 +164,7 @@ async function request(payload, resetSelection=false, feedback={}){
  finally{setBusy(false);}
 }
 function load(text){
- try{const data=JSON.parse(text);if(!data||![1,2,3].includes(data.version))throw Error('Unsupported replay version.');return request({version:data.version,scenario:data.scenario??0,mode:1,difficulty:data.difficulty,actions:data.actions},true);}
+ try{const data=JSON.parse(text);if(!data||![1,2,3,4].includes(data.version))throw Error('Unsupported replay version.');return request({version:data.version,scenario:data.scenario??0,mode:1,difficulty:data.difficulty,actions:data.actions},true);}
  catch(e){$('error').textContent='Cannot load replay: '+e.message;return Promise.resolve(false);}
 }
 function activeCheckpoint(){
@@ -172,9 +187,11 @@ $('file').onchange=async()=>{
  finally{setBusy(false);}
 };
 $('resume').onclick=()=>{try{const text=localStorage.getItem(CHECKPOINT);if(!text)throw Error('No saved game in this browser.');return load(text);}catch(e){$('error').textContent=e.message;}};
+$('campaign').onclick=()=>{try{const text=localStorage.getItem(CAMPAIGN_CHECKPOINT);if(!text)throw Error('No previous campaign replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
 $('previous').onclick=()=>{try{const text=localStorage.getItem(PREVIOUS_CHECKPOINT);if(!text)throw Error('No previous hex replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
 $('legacy').onclick=()=>{try{const text=localStorage.getItem(LEGACY_CHECKPOINT);if(!text)throw Error('No old square replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
-let saved=false,oldSaved=false,previousSaved=false;try{saved=!!localStorage.getItem(CHECKPOINT);oldSaved=!!localStorage.getItem(LEGACY_CHECKPOINT);previousSaved=!!localStorage.getItem(PREVIOUS_CHECKPOINT);}catch{}
+let saved=false,oldSaved=false,previousSaved=false,campaignSaved=false;try{saved=!!localStorage.getItem(CHECKPOINT);oldSaved=!!localStorage.getItem(LEGACY_CHECKPOINT);previousSaved=!!localStorage.getItem(PREVIOUS_CHECKPOINT);campaignSaved=!!localStorage.getItem(CAMPAIGN_CHECKPOINT);}catch{}
+$('campaign').hidden=!campaignSaved;
 $('previous').hidden=!previousSaved;
 $('legacy').hidden=!oldSaved;
 if(saved){$('notice').textContent='A local checkpoint is available. Resume it or start a new game.';}

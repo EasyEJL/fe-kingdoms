@@ -36,6 +36,9 @@ fn check_bounds(_ s: State) {
         assert(s.owner[i] >= 0 && s.owner[i] <= 2)
         assert(s.fort[i] >= 0 && s.fort[i] <= 2)
         assert(s.settlement[i] >= 0 && s.settlement[i] <= 2)
+        let army = army_at(s, i)
+        assert(army.infantry >= 0 && army.cavalry >= 0 && army.siege >= 0)
+        assert(army_size(army) == s.troops[i])
         if passable(s, i) { assert(s.troops[i] >= 1 && s.troops[i] <= 12) }
         else { assert(s.owner[i] == 0 && s.troops[i] == 0 && s.settlement[i] == 0) }
     }
@@ -284,4 +287,184 @@ fn capped_food_projection_uses_the_real_turn_transition() {
     let actual = begin_turn(s)
     assert(actual.food[1] == 37)
     assert(actual.food[2] == s.food[2])
+}
+
+// TROOP ROLE INVARIANTS AND TACTICS
+fn same_army(_ a: Army, _ b: Army) -> bool {
+    a.infantry == b.infantry && a.cavalry == b.cavalry && a.siege == b.siege
+}
+#[test]
+fn every_bounded_composition_detaches_and_merges_exactly() {
+    for total in 2 .. 13 {
+        for cavalry in 0 .. total + 1 {
+            for siege in 0 .. total - cavalry + 1 {
+                let army = Army {
+                    infantry: (total - cavalry - siege).downcast_unchecked(),
+                    cavalry: cavalry.downcast_unchecked(), siege: siege.downcast_unchecked(),
+                }
+                for amount in 1 .. total {
+                    let moving = detachment(army, amount.downcast_unchecked())
+                    let left = subtract_armies(army, moving)
+                    assert(army_size(moving) == amount.downcast_unchecked())
+                    assert(army_size(left) >= 1)
+                    assert(left.infantry >= 0 && left.cavalry >= 0 && left.siege >= 0)
+                    assert(moving.infantry >= 0 && moving.cavalry >= 0 && moving.siege >= 0)
+                    assert(same_army(combine_armies(left, moving), army))
+                    if army.infantry > 0 { assert(left.infantry >= 1) }
+                    else if army.cavalry > 0 { assert(left.cavalry >= 1) }
+                    else { assert(left.siege >= 1) }
+                    assert(same_army(moving, detachment(army, amount.downcast_unchecked())))
+                }
+            }
+        }
+    }
+    let balanced = detachment(Army { infantry: 4, cavalry: 2, siege: 2 }, 4)
+    assert(same_army(balanced, Army { infantry: 2, cavalry: 1, siege: 1 }))
+}
+#[test]
+fn specialist_recruitment_and_training_are_explicit_paid_orders() {
+    var s = initial(0)
+    let cavalry = Action { kind: 5, from: 5, to: 5, amount: 1 }
+    assert(!is_legal(s, cavalry))
+    s.settlement[5] = 2
+    assert(is_legal(s, cavalry))
+    s = apply(s, cavalry)
+    assert(s.troops[5] == 2 && s.cavalry[5] == 1 && army_at(s, 5).infantry == 1)
+    assert(s.gold[1] == 4 && s.food[1] == 10 && s.orders == 1)
+    assert(!is_legal(s, Action { kind: 6, from: 5, to: 5, amount: 1 }))
+    s.gold[1] = 40
+    s.troops[5] = 12
+    let train = Action { kind: 8, from: 5, to: 5, amount: 1 }
+    assert(!is_legal(s, cavalry) && is_legal(s, train))
+    let before = army_at(s, 5)
+    s = apply(s, train)
+    assert(s.troops[5] == 12 && s.siege[5] == 1 && s.cavalry[5] == 1)
+    assert(army_at(s, 5).infantry == before.infantry - 1)
+    assert(s.gold[1] == 35 && s.food[1] == 7)
+    s.side = 1
+    s.troops[5] = 2
+    assert(army_at(s, 5).infantry == 0)
+    assert(!is_legal(s, Action { kind: 7, from: 5, to: 5, amount: 1 }))
+    s.owner[0] = 2
+    assert(!is_legal(s, Action { kind: 6, from: 5, to: 5, amount: 1 }))
+}
+#[test]
+fn role_power_depends_on_target_and_infantry_combat_is_unchanged() {
+    var s = initial(0)
+    let mixed = Army { infantry: 2, cavalry: 2, siege: 2 }
+    assert(attack_power(s, 11, mixed) == 8)
+    assert(attack_power(s, 7, mixed) == 6)
+    s.fort[7] = 2
+    assert(attack_power(s, 7, mixed) == 10)
+    assert(attack_power(s, 14, mixed) == 10)
+    assert(attack_power(s, 6, mixed) == 12)
+    for troops in 2 .. 13 {
+        let count: i64 = troops.downcast_unchecked()
+        let infantry = Army { infantry: count, cavalry: 0, siege: 0 }
+        for target_defense in 1 .. troops {
+            let protection: i64 = target_defense.downcast_unchecked()
+            assert(capture_losses(infantry, count, protection) == protection)
+        }
+    }
+}
+#[test]
+fn mixed_capture_repel_merge_and_losses_preserve_roles() {
+    var s = initial(0)
+    s.owner[6] = 1
+    s.troops[6] = 8
+    s.cavalry[6] = 2
+    s.siege[6] = 2
+    let moving = detachment(army_at(s, 6), 7)
+    let combined = combine_armies(army_at(s, 5), moving)
+    let friendly = apply(s, Action { kind: 1, from: 6, to: 5, amount: 7 })
+    assert(same_army(army_at(friendly, 5), combined))
+    assert(same_army(army_at(friendly, 6), Army { infantry: 1, cavalry: 0, siege: 0 }))
+    s.owner[7] = 2
+    s.troops[7] = 9
+    s.fort[7] = 2
+    s.cavalry[7] = 2
+    s.siege[7] = 1
+    let repelled = apply(s, Action { kind: 1, from: 6, to: 7, amount: 7 })
+    assert(repelled.owner[7] == 2 && repelled.troops[6] == 1)
+    assert(repelled.troops[7] == 1 && repelled.siege[7] == 1)
+    s.troops[7] = 3
+    let captured = apply(s, Action { kind: 1, from: 6, to: 7, amount: 7 })
+    assert(captured.owner[7] == 1 && captured.fort[7] == 0)
+    assert(captured.siege[7] == 2)
+    check_bounds(captured)
+}
+#[test]
+fn attrition_and_hunger_use_the_same_casualty_priority() {
+    assert(same_army(lose_troops(Army { infantry: 2, cavalry: 2, siege: 2 }, 3),
+        Army { infantry: 0, cavalry: 1, siege: 2 }))
+    var s = initial(0)
+    s.owner[8] = 1
+    s.troops[8] = 3
+    s.cavalry[8] = 1
+    s.siege[8] = 1
+    s = begin_turn(s)
+    assert(same_army(army_at(s, 8), Army { infantry: 0, cavalry: 1, siege: 1 }))
+    s = begin_turn(s)
+    assert(same_army(army_at(s, 8), Army { infantry: 0, cavalry: 0, siege: 1 }))
+    s = begin_turn(s)
+    assert(same_army(army_at(s, 8), Army { infantry: 0, cavalry: 0, siege: 1 }))
+}
+fn fortified_frontline() -> State {
+    var s = initial(0)
+    for i in 0 .. tile_count(s) {
+        if passable(s, i) {
+            if i % map_width(s) < map_width(s) / 2 {
+                s.owner[i] = 1
+                s.troops[i] = 12
+            }
+        }
+    }
+    s.settlement[6] = 2
+    s.owner[7] = 2
+    s.owner[8] = 2
+    s.troops[7] = 12
+    s.fort[7] = 2
+    s.orders = 1
+    s.gold = [0, 40, 40]
+    s.food = [0, 40, 40]
+    s
+}
+#[test]
+fn full_frontline_can_train_and_breach_the_fortified_pass() {
+    for difficulty in 0 .. 2 {
+        var s = fortified_frontline()
+        let train = Action { kind: 8, from: 6, to: 6, amount: 1 }
+        assert(defense(s, 7) == 15)
+        assert(!is_legal(s, Action { kind: 6, from: 6, to: 6, amount: 1 }))
+        assert(is_legal(s, train))
+        var stats = Search { nodes: 0 }
+        let chosen = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        assert(chosen.kind == 8 && chosen.from == 6)
+        s.orders = 2
+        s = apply(s, train)
+        s = apply(s, train)
+        s = apply(s, pass())
+        s = apply(s, train)
+        let assault = Action { kind: 1, from: 6, to: 7, amount: 11 }
+        assert(attack_power(s, 7, detachment(army_at(s, 6), 11)) == 17)
+        let attack = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        assert(same_action(attack, assault))
+        s = apply(s, assault)
+        assert(s.owner[7] == 1 && s.troops[7] >= 1)
+        check_bounds(s)
+    }
+}
+#[test]
+fn both_policies_take_specialist_capital_wins() {
+    var s = initial(0)
+    s.owner[13] = 1
+    s.troops[13] = 12
+    s.siege[13] = 2
+    s.troops[14] = 12
+    s.fort[14] = 2
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let action = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        assert(apply(s, action).result == 1)
+    }
 }

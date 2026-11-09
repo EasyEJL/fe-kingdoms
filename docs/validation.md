@@ -19,3 +19,23 @@ Generated logs, traces, timings and source hashes live under ignored `evidence/`
 ## Campaign v3 milestone
 
 Full verification passed after the richer campaign rules: 16 Fe tests, 11 adapter tests, expanded UI unit tests, six complete matches, ten malformed native inputs, exact replay, both old replay versions and a 69-action capital capture over 53 HTTP requests. Small Hard-versus-Easy ended in Blue victory; the other five tested pairings/scenarios drew. Slowest individual action in this regression run was about 0.26 seconds. These draws are a documented defensive-balance limitation, not a passing claim about fun.
+
+
+## Mixed-army v4 milestone
+
+The final `scripts/verify.ps1` run passed on 2026-11-09: 23 native Fe tests, 12 adapter tests, the expanded mocked UI tests, six complete matches, ten malformed-input cases, exact replay and a 69-action Blue capital capture over 53 real HTTP requests. Older v1/v2/v3 winning replays remain read-only. Infantry-only v4 positions match the frozen v3 engine at sampled prefixes and the terminal position. Actual mixed-army legal-action previews also match subsequent native results, including specialist recruitment and paid training.
+
+The small-map regression outcomes were Easy/Easy draw (240 actions), Hard/Easy Blue victory (69), Easy/Hard draw (239), Hard/Hard draw (238). Medium and large Easy/Easy drew in 239 and 238 actions. Hard/Hard used 60 specialist orders; the other five traces used none. The slowest individual native request in the final matrix took approximately 0.57 seconds. Separate Hard opening replies on medium/large took about 0.25/0.27 seconds and replayed exactly; these opening checks are not complete Hard matches on the larger maps.
+
+Directed tests show both policies training siege at a capped frontline town and attacking once three siege can breach defense fifteen. Composition tests exhaust bounded detachments and merges. Independent code review found no concrete correctness defect. These results establish regression coverage and tactical capability, not strong long-term planning or beginner-friendly balance. No draw trigger was changed: four consecutive passes or 120 completed side turns still end a game.
+
+Generated v4 evidence includes `verification.json`, `matches-summary.json`, `http-full-match.json` and `large-map-hard-opening.json` under ignored `evidence/`. The source and tests, not generated binaries/logs, are committed. An initial adapter-test attempt failed because a new test fixture tried to spend five gold when only four were available; the fixture was corrected using Fe's legal list and the entire suite was rerun successfully. No game rule was changed to satisfy that fixture.
+
+## Next human playtest
+
+- Start a small Easy game. Open A2's territory card, recruit two infantry, then send two troops to B2. Confirm that the two orders are kingdom-wide and Red has not moved until **Run computer turn** is clicked.
+- Check whether legal choices, combat forecasts, food projection and disconnected-territory warnings are understandable without reading source.
+- Try a town and explicit specialist recruitment/training. Check that the difference between adding and converting a unit is clear.
+- Play to a result and save the replay if a loss, stalemate or computer decision seems surprising. This is the useful next input before adding water, roads or more troop types.
+
+The current v4 browser has not been independently exercised by automated browser clicks or a new human playtest. Mocked DOM tests, native tests and genuine HTTP requests remain distinct from those missing checks.
