@@ -14,12 +14,12 @@ def request_text(data):
     if not isinstance(data, dict) or set(data) - {'version','scenario','mode','difficulty','actions'}:
         raise ValueError('Expected version, scenario, mode, difficulty, and actions only.')
     version, scenario = data.get('version'), data.get('scenario',0)
-    if type(version) is not int or version not in (1,2):
+    if type(version) is not int or version not in (1,2,3):
         raise ValueError('Missing or unsupported replay version. Refresh the page for the hex game.')
-    if type(scenario) is not int or scenario!=0:
+    if type(scenario) is not int or not 0<=scenario<=2 or (version<3 and scenario!=0):
         raise ValueError('Unsupported map scenario.')
-    if version==1 and data.get('mode',0)!=1:
-        raise ValueError('Version-1 square-map replays are read-only. Start a new hex game to play.')
+    if version<3 and data.get('mode',0)!=1:
+        raise ValueError('Older rule-version replays are read-only. Start a new campaign game to play.')
     mode, difficulty, actions = data.get('mode', 0), data.get('difficulty'), data.get('actions')
     if type(mode) is not int or mode not in (0, 1) or type(difficulty) is not int or difficulty not in (0, 1):
         raise ValueError('Invalid mode or difficulty.')
@@ -28,12 +28,12 @@ def request_text(data):
     for action in actions:
         if not isinstance(action, list) or len(action) != 4 or any(type(n) is not int or not 0 <= n <= 4294967295 for n in action):
             raise ValueError('Each action must contain four unsigned integers.')
-    header = f'{version} {mode} {difficulty} '+(f'{scenario} ' if version==2 else '')+f'{len(actions)}\n'
+    header = f'{version} {mode} {difficulty} '+(f'{scenario} ' if version>=2 else '')+f'{len(actions)}\n'
     return header + ''.join(' '.join(map(str, a)) + '\n' for a in actions)
 
 
 def decode(text):
-    data = {'tiles': [], 'legal': [], 'actions': [], 'previews': []}
+    data = {'tiles': [], 'legal': [], 'actions': [], 'previews': [], 'economy': []}
     for line in text.splitlines():
         fields = [int(n) for n in line.split()]
         if not fields:
@@ -43,14 +43,16 @@ def decode(text):
             data['version'], data['difficulty'], count = values
         elif tag == 1 and len(values) == 13 and 'state' not in data:
             data['state'] = dict(zip(('side', 'orders', 'turn', 'result', 'gold1', 'gold2', 'quiet', 'lastKind', 'lastFrom', 'lastTo', 'lastAmount', 'nodes', 'depth'), values))
-        elif tag == 2 and len(values) in (6,8):
-            data['tiles'].append(dict(zip(('index', 'owner', 'troops', 'fort', 'supplied', 'terrain','q','r'), values)))
+        elif tag == 2 and len(values) in (6,8,11):
+            data['tiles'].append(dict(zip(('index', 'owner', 'troops', 'fort', 'supplied', 'terrain','q','r','settlement','passable','upkeep'), values)))
         elif tag == 6 and len(values)==9 and 'map' not in data:
             data['map']=dict(zip(('width','height','count','topology','scenario','blueCapital','redCapital','orderBudget','maxTurns'),values))
+        elif tag == 7 and len(values)==9 and values[0]==len(data['economy'])+1:
+            data['economy'].append(dict(zip(('side','food','goldIncome','foodProduction','foodUpkeep','foodNet','disconnectedTiles','shortageLossesNextTurn','projectedFood'),values)))
         elif tag == 3 and len(values) == 4:
             data['legal'].append(values)
-        elif tag == 5 and len(values) == 10 and values[0] == len(data['previews']):
-            data['previews'].append(dict(zip(('index','outcome','cost','sourceTroops','targetTroops','targetOwner','nextSide','nextOrders','result','defense'),values)))
+        elif tag == 5 and len(values) in (10,14) and values[0] == len(data['previews']):
+            data['previews'].append(dict(zip(('index','outcome','cost','sourceTroops','targetTroops','targetOwner','nextSide','nextOrders','result','defense','foodCost','settlementAfter','food1After','food2After'),values)))
         elif tag == 4 and len(values) == 5 and values[0] == len(data['actions']):
             data['actions'].append(values[1:])
         else:
@@ -58,14 +60,14 @@ def decode(text):
     if data.get('version')==1:
         data['map']=dict(width=5,height=3,count=15,topology=0,scenario=0,blueCapital=0,redCapital=14,orderBudget=2,maxTurns=120)
         for tile in data['tiles']: tile.update(q=tile['index']%5,r=tile['index']//5)
-    if data.get('version') not in (1,2) or 'state' not in data or 'map' not in data or not 1<=data['map']['count']<=63 or len(data['tiles'])!=data['map']['count'] or [t['index'] for t in data['tiles']]!=list(range(data['map']['count'])) or len(data['actions']) != count or len(data['previews']) != len(data['legal']):
+    if data.get('version') not in (1,2,3) or 'state' not in data or 'map' not in data or not 1<=data['map']['count']<=63 or len(data['tiles'])!=data['map']['count'] or [t['index'] for t in data['tiles']]!=list(range(data['map']['count'])) or len(data['actions']) != count or len(data['previews']) != len(data['legal']) or (data.get('version')==3 and len(data['economy'])!=2):
         raise RuntimeError('Incomplete native engine response.')
     return data
 
 
 def game(data):
     protocol = request_text(data)
-    name='kingdom-v1' if data['version']==1 else 'kingdom'
+    name='kingdom-v'+str(data['version']) if data['version']<3 else 'kingdom'
     executable = os.environ.get('KINGDOM_ENGINE', str(ROOT / 'out' / name))
     result = subprocess.run([executable], input=protocol, text=True, capture_output=True, timeout=30, cwd=ROOT)
     if result.returncode == 2:

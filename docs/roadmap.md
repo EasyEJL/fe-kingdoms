@@ -1,15 +1,15 @@
-# Future direction
+# Development direction and current scope
 
-## User direction, not yet implemented
+The user wants medieval Risk with meaningful resource management and little bookkeeping. Hexes were explicitly prioritized before further mechanics. All authoritative rules and opponent decisions remain in Fe.
 
-The intended direction is medieval Risk: map conquest with some meaningful resource management and limited bookkeeping. The later graphical map should use hexes. Food, water, a larger map and troop types were discussed as possible richer mechanics, not as a request to add them all immediately.
+## Milestones
 
-## Recommended sequence, still proposed
+1. **Implemented and committed:** true axial hex topology, matching layout, one-open owned-territory action cards, explicit turn handoff, Fe forecasts and preserved older replays. See ADR 0005 and commit bd40373.
+2. **Implemented and tested, with defensive-stall limits:** strategic ridges/passes, villages/towns, food and capital-connected supply, and three map sizes. See ADR 0006. Integrated tests pass, but most self-play pairings draw. Keep the previous playable instance available while siege roles are tested.
+3. **Design only:** distinct troop roles. Evaluate a small roster with clear terrain/fortification tradeoffs, explicit composition and Fe forecasts. Do not silently convert units when merging armies or add hidden computer bonuses.
 
-1. Retest the explicit two-order flow and combat forecasts. Check whether players understand their choices and whether a short match is enjoyable.
-2. If the budget still feels restrictive, compare alternatives on the existing map before adding systems. More orders or a planning/commit phase are proposals, not current rules.
-3. Test one economic addition, such as food connecting farms and army supply, with visible consequences and little bookkeeping.
-4. Design the larger hex map and revise adjacency, movement and replay versioning deliberately.
-5. Add roads or distinct troop roles only when they create understandable strategic tradeoffs. Water and other resources remain optional ideas.
+## After implementation
 
-No expanded economy, hex map, troop roster, Unreal integration, publishing or remote Git setup is approved as part of the current documentation task. Keep any separate game-engine exploration separate unless the user chooses an integration plan.
+Retest clarity and enjoyment with a human. Small deterministic bot tournaments catch regressions but do not establish a fun or well-balanced game. Compare order-budget or planning-phase alternatives only if playtest feedback supports them. Water, roads and further economic systems remain optional ideas, not a requirement to add everything at once.
+
+The local game stays separate from any Unreal exploration. No remote Git, public publishing, deployment or package registration is authorized by this work. Commit coherent local milestones with their decisions and verification evidence. Stop and report if reliable agent allowance reaches 25% remaining.

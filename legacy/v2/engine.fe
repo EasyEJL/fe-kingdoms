@@ -1,0 +1,256 @@
+use core::marker::Copy
+
+// Crownlines: every rule, action, score and search decision lives in Fe.
+struct State {
+    owner: [i64; 15], troops: [i64; 15], fort: [i64; 15], gold: [i64; 3],
+    side: i64, orders: i64, turn: i64, result: i64, passes: i64,
+}
+impl Copy for State {}
+struct Action { kind: i64, from: usize, to: usize, amount: i64 }
+impl Copy for Action {}
+struct Actions { items: [Action; 256], len: usize }
+impl Copy for Actions {}
+struct Search { nodes: i64 }
+fn pass() -> Action { Action { kind: 0, from: 0, to: 0, amount: 0 } }
+fn terrain(_ i: usize) -> i64 {
+    if i == 0 || i == 14 { 4 }
+    else if i == 2 || i == 12 { 1 }
+    else if i == 6 || i == 8 { 2 }
+    else if i == 3 || i == 7 || i == 11 { 3 }
+    else { 0 }
+}
+fn abs(_ n:i64)->i64 { if n<0 {-n} else {n} }
+// Axial hex coordinates. Rendering uses the same q=column, r=row convention.
+fn hex_distance(_ a:usize,_ b:usize)->i64 {
+    let aq:i64=(a%5).downcast_unchecked()
+    let ar:i64=(a/5).downcast_unchecked()
+    let bq:i64=(b%5).downcast_unchecked()
+    let br:i64=(b/5).downcast_unchecked()
+    (abs(aq-bq)+abs(ar-br)+abs(aq-bq+ar-br))/2
+}
+fn adjacent(_ a:usize,_ b:usize)->bool { a<15 && b<15 && hex_distance(a,b)==1 }
+fn initial() -> State {
+    var s = State { owner: [0;15], troops: [1;15], fort: [0;15], gold: [0,6,6], side:1, orders:2, turn:1, result:0, passes:0 }
+    s.owner[0] = 1
+    s.owner[1] = 1
+    s.owner[5] = 1
+    s.owner[14] = 2
+    s.owner[13] = 2
+    s.owner[9] = 2
+    s.troops[0] = 5
+    s.troops[14] = 5
+    s.troops[1] = 2
+    s.troops[13] = 2
+    s.fort[0] = 1
+    s.fort[14] = 1
+    s
+}
+fn supply(_ s:State,_ side:i64)->[bool;15] {
+    var connected=[false;15]
+    var queue:[usize;15]=[0;15]
+    let capital:usize=if side==1 {0} else {14}
+    if s.owner[capital]!=side {return connected}
+    connected[capital]=true
+    queue[0]=capital
+    var head:usize=0
+    var tail:usize=1
+    while head<tail {
+        let current=queue[head]
+        head+=1
+        for j in 0 .. 15 {
+            if !connected[j] && s.owner[j]==side && adjacent(current,j) {
+                connected[j]=true
+                queue[tail]=j
+                tail+=1
+            }
+        }
+    }
+    connected
+}
+fn empty_actions() -> Actions { Actions { items: [pass();256], len:0 } }
+fn add(_ a: Action) uses (list: mut Actions) {
+    assert(list.len < 256)
+    list.items[list.len] = a
+    list.len += 1
+}
+fn legal(_ s: State) -> Actions {
+    var result = empty_actions()
+    if s.result != 0 { return result }
+    let connected = supply(s,s.side)
+    let player: usize = s.side.downcast_unchecked()
+    with (Actions = result) {
+        add(pass())
+        for i in 0 .. 15 {
+            if s.owner[i] == s.side {
+                if connected[i] && s.gold[player] >= 3 && s.troops[i] <= 10 {
+                    add(Action {kind:2,from:i,to:i,amount:2})
+                }
+                if connected[i] && s.gold[player] >= 2 && s.fort[i] < 2 {
+                    add(Action {kind:3,from:i,to:i,amount:1})
+                }
+                if s.troops[i] > 1 {
+                    for j in 0 .. 15 {
+                        if adjacent(i,j) {
+                            let full = s.troops[i]-1
+                            let half = s.troops[i]/2
+                            if s.owner[j] != s.side || s.troops[j]+full <= 12 {
+                                add(Action {kind:1,from:i,to:j,amount:full})
+                            }
+                            if half != full && (s.owner[j] != s.side || s.troops[j]+half <= 12) {
+                                add(Action {kind:1,from:i,to:j,amount:half})
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    result
+}
+fn same_action(_ a:Action,_ b:Action)->bool { a.kind == b.kind && a.from == b.from && a.to == b.to && a.amount == b.amount }
+fn is_legal(_ s:State,_ a:Action)->bool {
+    let choices = legal(s)
+    for i in 0 .. choices.len { if same_action(a,choices.items[i]) { return true } }
+    false
+}
+fn imin(_ a:i64,_ b:i64)->i64 { if a < b {a} else {b} }
+fn imax(_ a:i64,_ b:i64)->i64 { if a > b {a} else {b} }
+fn defense(_ s:State,_ tile:usize)->i64 { s.troops[tile]+s.fort[tile]+if terrain(tile)==3 {1} else {0} }
+// Only called after legality has been checked, or on actions returned by legal().
+fn apply(_ before:State,_ a:Action)->State {
+    var s = before
+    let player:usize = s.side.downcast_unchecked()
+    if a.kind == 0 {
+        s.passes += 1
+        s.orders = 0
+    } else {
+        s.passes = 0
+        s.orders -= 1
+        if a.kind == 2 {
+            s.gold[player] -= 3
+            s.troops[a.from] += 2
+        } else if a.kind == 3 {
+            s.gold[player] -= 2
+            s.fort[a.from] += 1
+        } else {
+            s.troops[a.from] -= a.amount
+            if s.owner[a.to] == s.side {
+                s.troops[a.to] += a.amount
+            } else {
+                let strength = defense(s,a.to)
+                if a.amount > strength {
+                    s.owner[a.to] = s.side
+                    s.troops[a.to] = a.amount-strength
+                    s.fort[a.to] = 0
+                } else {
+                    let casualties = imax(1,a.amount-(strength-s.troops[a.to]))
+                    s.troops[a.to] = imax(1,s.troops[a.to]-casualties)
+                }
+            }
+        }
+    }
+    if s.owner[0] == 2 { s.result = 2 }
+    if s.owner[14] == 1 { s.result = 1 }
+    if s.result != 0 { return s }
+    if s.orders == 0 {
+        s.side = 3-s.side
+        s.orders = 2
+        s.turn += 1
+        if s.turn > 120 || s.passes >= 4 { s.result = 3
+ return s }
+        let connected = supply(s,s.side)
+        var income:i64 = 2
+        for i in 0 .. 15 {
+            if s.owner[i] == s.side {
+                if connected[i] {
+                    if terrain(i) == 1 || terrain(i) == 2 { income += 1 }
+                } else { s.troops[i] = imax(1,s.troops[i]-1) }
+            }
+        }
+        let next:usize = s.side.downcast_unchecked()
+        s.gold[next] = imin(30,s.gold[next]+income)
+    }
+    s
+}
+fn evaluate(_ s:State,_ root:i64)->i64 {
+    if s.result == root { return 100000-s.turn }
+    if s.result == 3-root { return -100000+s.turn }
+    if s.result == 3 { return 0 }
+    let p:usize = root.downcast_unchecked()
+    let q:usize = (3-root).downcast_unchecked()
+    var score = (s.gold[p]-s.gold[q])*3
+    let own_supply = supply(s,root)
+    let enemy_supply = supply(s,3-root)
+    for i in 0 .. 15 {
+        if s.owner[i] != 0 {
+            let sign:i64 = if s.owner[i] == root {1} else {-1}
+            let connected = if sign == 1 {own_supply[i]} else {enemy_supply[i]}
+            let enemy_cap:usize = if s.owner[i] == 1 {14} else {0}
+            let distance=hex_distance(i,enemy_cap)
+            score += sign*(24+s.troops[i]*12+s.fort[i]*4)
+            if connected { score += sign*10 } else { score -= sign*14 }
+            if terrain(i) == 1 || terrain(i) == 2 { score += sign*24 }
+            if s.troops[i]>1 { score += sign*((6-distance)*2*s.troops[i]) }
+            if adjacent(i,enemy_cap) {
+                score += sign*s.troops[i]*5
+                if s.troops[i]-1 > defense(s,enemy_cap) { score += sign*300 }
+            }
+        }
+    }
+    score
+}
+// Stable action ordering, bounded beam, alpha-beta minimax
+// No random or hidden bonuses.
+fn ranked(_ s:State,_ root:i64)->Actions {
+    var list = legal(s)
+    var scores = [0;256]
+    for k in 0 .. list.len { scores[k] = evaluate(apply(s,list.items[k]),root) }
+    for i in 1 .. list.len {
+        let chosen = list.items[i]
+        let value = scores[i]
+        var j = i
+        while j > 0 {
+            let previous = scores[j-1]
+            let better = if s.side == root {value > previous} else {value < previous}
+            if !better { break }
+            list.items[j] = list.items[j-1]
+            scores[j] = scores[j-1]
+            j -= 1
+        }
+        list.items[j] = chosen
+        scores[j] = value
+    }
+    list
+}
+fn search(_ s:State,_ depth:usize,_ root:i64,_ low:i64,_ high:i64)->i64 uses (stats:mut Search) {
+    stats.nodes += 1
+    if depth == 0 || s.result != 0 { return evaluate(s,root) }
+    let list = ranked(s,root)
+    let bound = if list.len < 6 {list.len} else {6}
+    var alpha = low
+    var beta = high
+    var best:i64 = if s.side == root {-200000} else {200000}
+    for i in 0 .. bound {
+        let score = search(apply(s,list.items[i]),depth-1,root,alpha,beta)
+        if s.side == root { best = imax(best,score)
+ alpha = imax(alpha,best) }
+        else { best = imin(best,score)
+ beta = imin(beta,best) }
+        if alpha >= beta { break }
+    }
+    best
+}
+fn choose(_ s:State,_ difficulty:i64)->Action uses (stats:mut Search) {
+    let list = ranked(s,s.side)
+    if difficulty == 0 { stats.nodes += list.len.downcast_unchecked()
+ return list.items[0] }
+    let bound = if list.len < 10 {list.len} else {10}
+    var best = list.items[0]
+    var score:i64 = -200000
+    for i in 0 .. bound {
+        let value = search(apply(s,list.items[i]),3,s.side,-200000,200000)
+        if value > score { score = value
+ best = list.items[i] }
+    }
+    best
+}

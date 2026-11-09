@@ -11,3 +11,5 @@ This is a reconstructed summary, first written on 2026-11-09 from the current co
 Future entries should cite actual commits, tests and playtest findings. Do not reconstruct exact dates, authorship or intermediate changes without evidence.
 
 After the initial local commit, the user authorized hexes first and staged mechanics work. The next milestone implements actual axial movement, supply and distance evaluation, grouped territory actions, and read-only compatibility for square-map saves. See ADR 0005 and Git history for the exact change.
+
+The campaign milestone adds bounded map sizes, ridges/passes, settlements and food. Full integration tests pass, but self-play identifies a fortification/maximum-attack mismatch and defensive stalls. That finding motivates a separate siege/specialist decision instead of hiding balance problems or rewriting the earlier history.
