@@ -9,3 +9,5 @@ This is a reconstructed summary, first written on 2026-11-09 from the current co
 5. The user requested local Git and documentation. The initial commit captures the existing implementation and starts normal project history from this point. No remote or publication is configured.
 
 Future entries should cite actual commits, tests and playtest findings. Do not reconstruct exact dates, authorship or intermediate changes without evidence.
+
+After the initial local commit, the user authorized hexes first and staged mechanics work. The next milestone implements actual axial movement, supply and distance evaluation, grouped territory actions, and read-only compatibility for square-map saves. See ADR 0005 and Git history for the exact change.

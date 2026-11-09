@@ -21,7 +21,7 @@ The current verified server may already be running in container `fe-kingdoms`. `
 
 - Full-information 5x3 map, two kingdoms, one currency (gold), one army type, and up to two fort levels. No random combat.
 - Both start with 6 gold and symmetrical territory/armies. Blue moves first. The opening Blue turn uses that starting treasury; income is collected on subsequent turn changes.
-- Move half a stack (rounded down) or all but one troop orthogonally. Friendly stacks combine, maximum 12. One troop remains behind.
+- Move half a stack (rounded down) or all but one troop to one of up to six hex neighbors. Friendly stacks combine, maximum 12. One troop remains behind.
 - Recruit 2 troops for 3 gold or fortify by 1 for 2 gold. Both require ownership and a supply path through your territory to your capital. Fort cap: 2.
 - Defense = defenders + fort + 1 on hills. Attackers must strictly exceed defense to conquer; survivors = attackers minus defense, and captured forts disappear. Otherwise all attackers are lost; defenders lose max(1, attackers minus fort minus hill bonus), with at least one surviving. The troop and fort caps are enforced by Fe's legal-action generation.
 - At the start of the incoming side's turn: gain 2 gold plus 1 for each supplied farm/town, capped at 30. Each disconnected territory loses 1 troop, minimum 1.
@@ -30,9 +30,9 @@ The current verified server may already be running in container `fe-kingdoms`. `
 
 ## Save, load and replay
 
-Save replay downloads versioned JSON containing difficulty and the full accepted order sequence, including computer actions. Load replay validates every action in Fe before replacing the board. A loaded replay can be continued; if it ends on Red's turn, use Run computer turn. The browser keeps the latest successful state as a local checkpoint. Export a replay to preserve multiple matches. The checkpoint is specific to browser and origin (localhost and 127.0.0.1 are separate).
+Save replay downloads versioned JSON containing difficulty and the full accepted order sequence, including computer actions. Load replay validates every action in Fe before replacing the board. A loaded replay can be continued; if it ends on Red's turn, use Run computer turn. The browser keeps the latest successful v2 state as a separate local checkpoint and never overwrites the old v1 checkpoint. Export a replay to preserve multiple matches. The checkpoint is specific to browser and origin (localhost and 127.0.0.1 are separate).
 
-Replay stores actions, not trusted state. It does not rerun AI decisions for recorded computer moves. Rules version 1 and this engine build reproduce the state exactly. Changes to game rules must introduce a new replay version rather than silently reinterpret old files. Difficulty controls future computer decisions only.
+Replay stores actions, not trusted state. It does not rerun AI decisions for recorded computer moves. New games use rules version 2. Version-1 square-map saves remain readable through the frozen legacy engine and cannot be continued under hex rules. Existing v1 browser checkpoints are preserved. Changes to game rules must introduce a new replay version rather than silently reinterpret old files. Difficulty controls future computer decisions only.
 
 ## Verify
 
@@ -57,13 +57,13 @@ Verified on this build:
 Run `out/kingdom` inside the pinned Linux image, with whitespace-separated decimal input:
 
 ```text
-1 MODE DIFFICULTY COUNT
+2 MODE DIFFICULTY SCENARIO COUNT
 KIND FROM TO AMOUNT
 ...COUNT records...
 ```
 
 - Mode 0: replay then let Fe finish Red's turn. Mode 1: replay only. Mode 2: complete Fe-vs-Fe self-play using one difficulty. Mode 3: choose and apply exactly one Fe action for the side to move (automated tests). The HTTP adapter exposes only modes 0 and 1.
-- Difficulty: 0 Easy, 1 Hard. At most 240 records and 16,384 input bytes. Tiles are 0..14, x + 5*y, A1=0 and E3=14.
+- Scenario is currently 0 (5x3 hex map). Difficulty: 0 Easy, 1 Hard. At most 240 records and 16,384 input bytes. Tiles are 0..14, x + 5*y, A1=0 and E3=14.
 - Kind 0 pass uses all zero remaining fields. Kind 1 moves FROM to TO by AMOUNT. Kind 2 recruits at FROM=TO with AMOUNT=2. Kind 3 fortifies at FROM=TO with AMOUNT=1. Legal actions must exactly match an Fe-generated action. No arbitrary snapshot import.
 - Output tag 0: protocol version, difficulty, accepted trace length. Tag 1: side, orders, turn, result, Blue gold, Red gold, consecutive passes, last action's four fields, search nodes, configured depth. Tag 2: tile index, owner, troops, fort, supplied flag, terrain. Tag 3: legal action's four fields. Tag 4: index and accepted action's four fields.
 - Result: 0 ongoing, 1 Blue victory, 2 Red victory, 3 draw. Terrain: 0 plain, 1 farm, 2 town, 3 hill, 4 capital. Owner: 0 neutral, 1 Blue, 2 Red.
@@ -74,7 +74,7 @@ Example:
 ```powershell
 $p = (Get-Location).Path
 $image = 'sha256:32e644f1599ac63427a9e545d643ad75adee6f14328c4b7d1be01e3bf728391d'
-'1 0 1 1 0 0 0 0' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
+'2 0 1 0 1 0 0 0 0' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
 ```
 
 This ends Blue's first turn and requests an actual hard Fe response. No terminal UI was built.
@@ -103,3 +103,9 @@ Easy is short-sighted, not deliberately harmless: it uses a strong greedy evalua
 For a medieval Risk direction, keep the next step small: first check that a short match offers understandable choices and a satisfying conquest arc. Then test one strategic addition, such as food tied to farms and army supply, before a larger graphical hex map, the requested later-stage direction. Hex movement and adjacency would be a deliberate future rules revision, not just a visual change. Roads and distinct troop roles should each earn their place by creating clear tradeoffs. Avoid adding water, several resources and multiple troop types at once. None of those expansions is implemented in this revision.
 
 Output tag 5 carries each legal action's exact Fe forecast in matching order: action index, outcome, gold cost, remaining source troops, remaining target troops, target owner, next side, next orders, result, pre-attack defense. Outcomes are 0 end turn, 1 friendly move, 2 capture, 3 repelled, 4 recruit, 5 fortify. The adapter only serializes these fields; the browser does not reproduce combat or resource rules.
+
+## Hex milestone (version 2)
+
+The board now uses actual six-neighbor axial topology in Fe and matching hex geometry in the browser. Each owned territory has an action card even when no tile is selected; at most one card is expanded. Turn controls remain separate. Saved square-map games load read-only rather than being reinterpreted with new movement rules.
+
+The current hex regression set produced three capital captures and one time-limit draw: Easy/Easy Red in 92 actions; Hard/Easy draw in 239; Easy/Hard Red in 84; Hard/Hard Blue in 125. These replace the square-map baseline for current rules; they do not establish broad balance.

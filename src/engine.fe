@@ -8,7 +8,7 @@ struct State {
 impl Copy for State {}
 struct Action { kind: i64, from: usize, to: usize, amount: i64 }
 impl Copy for Action {}
-struct Actions { items: [Action; 128], len: usize }
+struct Actions { items: [Action; 256], len: usize }
 impl Copy for Actions {}
 struct Search { nodes: i64 }
 fn pass() -> Action { Action { kind: 0, from: 0, to: 0, amount: 0 } }
@@ -19,9 +19,16 @@ fn terrain(_ i: usize) -> i64 {
     else if i == 3 || i == 7 || i == 11 { 3 }
     else { 0 }
 }
-fn adjacent(_ a: usize, _ b: usize) -> bool {
-    (a / 5 == b / 5 && (a + 1 == b || b + 1 == a)) || a + 5 == b || b + 5 == a
+fn abs(_ n:i64)->i64 { if n<0 {-n} else {n} }
+// Axial hex coordinates. Rendering uses the same q=column, r=row convention.
+fn hex_distance(_ a:usize,_ b:usize)->i64 {
+    let aq:i64=(a%5).downcast_unchecked()
+    let ar:i64=(a/5).downcast_unchecked()
+    let bq:i64=(b%5).downcast_unchecked()
+    let br:i64=(b/5).downcast_unchecked()
+    (abs(aq-bq)+abs(ar-br)+abs(aq-bq+ar-br))/2
 }
+fn adjacent(_ a:usize,_ b:usize)->bool { a<15 && b<15 && hex_distance(a,b)==1 }
 fn initial() -> State {
     var s = State { owner: [0;15], troops: [1;15], fort: [0;15], gold: [0,6,6], side:1, orders:2, turn:1, result:0, passes:0 }
     s.owner[0] = 1
@@ -38,24 +45,31 @@ fn initial() -> State {
     s.fort[14] = 1
     s
 }
-fn supply(_ s: State, _ side: i64) -> [bool;15] {
-    var connected = [false;15]
-    let capital: usize = if side == 1 { 0 } else { 14 }
-    connected[capital] = s.owner[capital] == side
-    for _round in 0 .. 15 {
-        for i in 0 .. 15 {
-            if s.owner[i] == side && !connected[i] {
-                for j in 0 .. 15 {
-                    if connected[j] && adjacent(i,j) { connected[i] = true }
-                }
+fn supply(_ s:State,_ side:i64)->[bool;15] {
+    var connected=[false;15]
+    var queue:[usize;15]=[0;15]
+    let capital:usize=if side==1 {0} else {14}
+    if s.owner[capital]!=side {return connected}
+    connected[capital]=true
+    queue[0]=capital
+    var head:usize=0
+    var tail:usize=1
+    while head<tail {
+        let current=queue[head]
+        head+=1
+        for j in 0 .. 15 {
+            if !connected[j] && s.owner[j]==side && adjacent(current,j) {
+                connected[j]=true
+                queue[tail]=j
+                tail+=1
             }
         }
     }
     connected
 }
-fn empty_actions() -> Actions { Actions { items: [pass();128], len:0 } }
+fn empty_actions() -> Actions { Actions { items: [pass();256], len:0 } }
 fn add(_ a: Action) uses (list: mut Actions) {
-    assert(list.len < 128)
+    assert(list.len < 256)
     list.items[list.len] = a
     list.len += 1
 }
@@ -172,9 +186,7 @@ fn evaluate(_ s:State,_ root:i64)->i64 {
             let sign:i64 = if s.owner[i] == root {1} else {-1}
             let connected = if sign == 1 {own_supply[i]} else {enemy_supply[i]}
             let enemy_cap:usize = if s.owner[i] == 1 {14} else {0}
-            let x:i64 = (i % 5).downcast_unchecked()
-            let y:i64 = (i / 5).downcast_unchecked()
-            let distance:i64 = if enemy_cap == 14 {6-x-y} else {x+y}
+            let distance=hex_distance(i,enemy_cap)
             score += sign*(24+s.troops[i]*12+s.fort[i]*4)
             if connected { score += sign*10 } else { score -= sign*14 }
             if terrain(i) == 1 || terrain(i) == 2 { score += sign*24 }
@@ -191,7 +203,7 @@ fn evaluate(_ s:State,_ root:i64)->i64 {
 // No random or hidden bonuses.
 fn ranked(_ s:State,_ root:i64)->Actions {
     var list = legal(s)
-    var scores = [0;128]
+    var scores = [0;256]
     for k in 0 .. list.len { scores[k] = evaluate(apply(s,list.items[k]),root) }
     for i in 1 .. list.len {
         let chosen = list.items[i]

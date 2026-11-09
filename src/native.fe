@@ -78,8 +78,9 @@ fn run() -> i32 uses(input:mut Input,reader:mut Read,writer:mut Write) {
     let version = number()
     let mode = number()
     let difficulty = number()
+    let scenario = number()
     let count = number()
-    if !input.ok || version != 1 || mode > 3 || difficulty > 1 || count > 240 { return 2 }
+    if !input.ok || version != 2 || scenario != 0 || mode > 3 || difficulty > 1 || count > 240 { return 2 }
     var trace = [pass();240]
     var length:usize = count.downcast_unchecked()
     var s = initial()
@@ -108,7 +109,7 @@ fn run() -> i32 uses(input:mut Input,reader:mut Read,writer:mut Write) {
         }
     }
     out(0)
- field(1)
+ field(2)
  field(difficulty.downcast_unchecked())
  field(small(length))
  write_char(10)
@@ -129,6 +130,9 @@ fn run() -> i32 uses(input:mut Input,reader:mut Read,writer:mut Write) {
     field(stats.nodes)
  field(if difficulty==0 {1} else {4})
  write_char(10)
+    out(6)
+    for value in [5,3,15,1,0,0,14,2,120] {field(value)}
+    write_char(10)
     let blue = supply(s,1)
     let red = supply(s,2)
     for i in 0 .. 15 {
@@ -140,6 +144,8 @@ fn run() -> i32 uses(input:mut Input,reader:mut Read,writer:mut Write) {
  field(s.fort[i])
  field(if supplied {1} else {0})
  field(terrain(i))
+ field(small(i%5))
+ field(small(i/5))
  write_char(10)
     }
     let choices = legal(s)

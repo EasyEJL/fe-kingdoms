@@ -90,7 +90,7 @@ fn generated_legal_actions_preserve_bounds() {
     for _step in 0 .. 240 {
         if s.result!=0 {break}
         let choices=legal(s)
-        assert(choices.len>0 && choices.len<=128)
+        assert(choices.len>0 && choices.len<=256)
         for k in 0 .. choices.len {
             let next=apply(s,choices.items[k])
             assert(next.gold[1]>=0 && next.gold[2]>=0 && next.gold[1]<=30 && next.gold[2]<=30)
@@ -118,4 +118,37 @@ fn hard_search_is_deterministic_and_deeper() {
     let c=with(Search=repeat) {choose(s,1)}
     assert(is_legal(s,a) && is_legal(s,b) && same_action(b,c))
     assert(hard.nodes>easy.nodes && hard.nodes==repeat.nodes)
+}
+
+#[test]
+fn axial_topology_is_symmetric_and_bounded() {
+    let neighbors:[usize;6]=[1,2,5,7,10,11]
+    for n in neighbors {assert(adjacent(6,n))}
+    assert(!adjacent(0,6) && adjacent(1,5) && !adjacent(4,5))
+    for a in 0 .. 15 {
+        var count:usize=0
+        for b in 0 .. 15 {
+            assert(adjacent(a,b)==adjacent(b,a))
+            assert(adjacent(a,b)==adjacent(14-a,14-b))
+            assert(hex_distance(a,b)==hex_distance(b,a))
+            if adjacent(a,b) {count+=1}
+        }
+        assert(count<=6)
+    }
+}
+#[test]
+fn diagonal_hex_move_and_supply() {
+    var s=initial()
+    s.troops[1]=4
+    let diagonal=Action {kind:1,from:1,to:5,amount:3}
+    assert(is_legal(s,diagonal))
+    s=apply(s,diagonal)
+    assert(s.troops[5]==4)
+    s.owner[0]=1
+    s.owner[1]=0
+    s.owner[5]=1
+    s.owner[6]=1
+    s.owner[2]=1
+    let supplied=supply(s,1)
+    assert(supplied[2])
 }
