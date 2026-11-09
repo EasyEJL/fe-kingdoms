@@ -85,10 +85,11 @@ fn route_evaluation_respects_all_chokepoints() {
     }
 }
 #[test]
-fn mountains_are_not_legal_targets() {
+fn rivers_and_mountains_are_not_legal_targets() {
     var s = initial(0)
     s.troops[1] = 6
-    assert(terrain(s, 2) == 5 && !passable(s, 2))
+    assert(terrain(s, 2) == 8 && !passable(s, 2))
+    assert(terrain(s, 4) == 5 && !passable(s, 4))
     assert(!is_legal(s, Action { kind: 1, from: 1, to: 2, amount: 5 }))
     let choices = legal(s)
     for i in 0 .. choices.len {
@@ -221,6 +222,7 @@ fn capital_victory_and_stalemate() {
         s.troops[home - 1] = 10
         s = apply(s, Action { kind: 1, from: home - 1, to: home, amount: 9 })
         assert(s.result == 1 && s.troops[home] == 2 && legal(s).len == 0)
+        assert(supply_count(s, 2).connected == 0 && supply_count(s, 2).cut_off > 0)
         s = initial(scenario)
         for _i in 0 .. 4 { s = apply(s, pass()) }
         assert(s.result == 3)
@@ -528,6 +530,8 @@ fn extension_pays_one_deferred_turn_without_spending_an_order() {
     assert(continued.gold[1] == expected.gold[1] && continued.food[1] == expected.food[1])
     assert(continued.gold[2] == s.gold[2] && continued.food[2] == s.food[2])
     assert(continued.troops[8] == 4)
+    assert(supply_count(continued, 1).connected == supply_count(s, 1).connected)
+    assert(supply_count(continued, 1).cut_off == supply_count(s, 1).cut_off)
     assert(!is_legal(continued, extend_campaign()))
     assert(!is_legal(continued, accept_draw()))
 }
@@ -599,5 +603,136 @@ fn extended_campaign_replay_and_bounds_survive_full_trace_capacity() {
             replay = apply(replay, trace[step])
         }
         assert(same_campaign(s, replay))
+    }
+}
+
+#[test]
+fn fixed_rivers_bridges_and_cached_capital_routes_match_oracle() {
+    for scenario in 0 .. 3 {
+        let s = initial(scenario)
+        let routes = navigation(s)
+        var bridges: i64 = 0
+        for i in 0 .. tile_count(s) {
+            if terrain(s, i) == 9 {
+                bridges += 1
+                assert(passable(s, i) && defense(s, i) == s.troops[i] + s.fort[i] + 1)
+                let cavalry = Army { infantry: 0, cavalry: 3, siege: 0 }
+                assert(attack_power(s, i, cavalry) == 3)
+            }
+            if passable(s, i) {
+                assert(routes.blue[i] == shortest_route(s, capital(s, 1), i))
+                assert(routes.red[i] == shortest_route(s, capital(s, 2), i))
+                assert(routes.blue[i] < 1000 && routes.red[i] < 1000)
+            } else {
+                assert(routes.blue[i] == 1000 && routes.red[i] == 1000)
+                assert(s.owner[i] == 0 && s.settlement[i] == 0)
+            }
+        }
+        assert(bridges == if scenario == 0 { 1 } else { 2 })
+        // Widened river forces a detour within the same side of the old ridge.
+        if scenario > 0 {
+            let a = map_width(s) + map_width(s) / 2 - 1
+            let b = 3 * map_width(s) + map_width(s) / 2 - 1
+            assert(travel_distance(s, a, b) > hex_distance(s, a, b))
+        }
+        for root in 1 .. 3 {
+            let side: i64 = root.downcast_unchecked()
+            let cached = with (Navigation = routes) { evaluate_cached(s, side) }
+            assert(cached == evaluate(s, side))
+        }
+    }
+}
+fn bridge_cut_position() -> State {
+    var s = initial(0)
+    s.owner[6] = 1
+    s.troops[6] = 12
+    s.siege[6] = 3
+    s.owner[7] = 2
+    s.troops[7] = 2
+    s.owner[8] = 2
+    s.owner[11] = 2
+    // This army cannot immediately recapture a defended bridge; otherwise
+    // Hard sensibly destroys the army first rather than making a fragile cut.
+    s.troops[11] = 8
+    s.fort[11] = 2
+    s.settlement[11] = 2
+    s.orders = 1
+    s.gold = [0, 0, 0]
+    s.food = [0, 40, 40]
+    s
+}
+#[test]
+fn both_policies_capture_bridge_and_cut_enemy_supply() {
+    let s = bridge_cut_position()
+    assert(supply(s, 2)[11] && supply_count(s, 2).cut_off == 0)
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let chosen = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        assert(chosen.kind == 1 && chosen.from == 6 && chosen.to == 7)
+        let after = apply(s, chosen)
+        assert(after.owner[7] == 1 && !supply(after, 2)[11])
+        assert(supply_count(after, 2).cut_off == 1)
+        assert(after.troops[11] == 7)
+        check_bounds(after)
+    }
+    // With a stronger army able to retake the bridge, Hard removes that
+    // counterattack threat first. A compulsory immediate cut would be worse.
+    var threatened = s
+    threatened.troops[11] = 12
+    var hard = Search { nodes: 0 }
+    let preparation = with (Search = hard) { choose(threatened, 1) }
+    assert(preparation.kind == 1 && preparation.from == 6 && preparation.to == 11)
+    let secured = apply(threatened, preparation)
+    assert(secured.owner[11] == 1)
+    assert(total_army(secured, 2) == total_army(threatened, 2) - 12)
+}
+#[test]
+fn supply_counts_distinguish_capture_cut_and_reconnection() {
+    var s = bridge_cut_position()
+    let before_blue = supply_count(s, 1)
+    let before_red = supply_count(s, 2)
+    let after = apply(s, Action { kind: 1, from: 6, to: 7, amount: 11 })
+    let blue = supply_count(after, 1)
+    let red = supply_count(after, 2)
+    // Blue gained a captured tile, not a reconnected tile. Red lost a tile
+    // and has one retained tile disconnected by the lost crossing.
+    assert(blue.connected == before_blue.connected + 1 && blue.cut_off == 0)
+    assert(red.connected == before_red.connected - 2 && red.cut_off == 1)
+    s = initial(0)
+    s.owner[6] = 1
+    s.troops[6] = 10
+    s.owner[7] = 2
+    s.owner[8] = 1
+    s.troops[8] = 4
+    s.gold[1] = 0
+    assert(supply_count(s, 1).cut_off == 1)
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let action = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        assert(action.kind == 1 && action.to == 7)
+        let reconnected = apply(s, action)
+        assert(supply_count(reconnected, 1).cut_off == 0)
+        assert(supply_count(reconnected, 1).connected == supply_count(s, 1).connected + 2)
+    }
+    // Water cannot form a supply path, even in an intentionally invalid state.
+    s.owner[2] = 1
+    s.owner[3] = 1
+    assert(!supply(s, 1)[2] && !supply(s, 1)[3])
+}
+#[test]
+fn navigation_cache_is_scoped_to_one_decision() {
+    let scenarios: [usize; 4] = [0, 2, 1, 0]
+    for difficulty in 0 .. 2 {
+        var first = pass()
+        var first_nodes: i64 = 0
+        for index in 0 .. 4 {
+            let s = initial(scenarios[index])
+            var stats = Search { nodes: 0 }
+            let action = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+            assert(is_legal(s, action))
+            if index == 0 { first = action
+                first_nodes = stats.nodes }
+            if index == 3 { assert(same_action(action, first) && stats.nodes == first_nodes) }
+        }
     }
 }

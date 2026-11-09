@@ -27,3 +27,5 @@ These documents explain the current project and the reasons behind it. They were
 ## Maintaining decisions
 
 Add an ADR for a meaningful architectural or rules decision, not every implementation edit. State its status, context, decision, consequences and supporting code or tests. Mark proposals as proposed until chosen. If a later decision replaces an accepted one, keep the old record and link the replacement. Update development and validation notes when the commands or evidence change.
+
+- [ADR 0010: Fixed rivers and supply forecasts](adr/0010-fixed-rivers-supply-previews.md).

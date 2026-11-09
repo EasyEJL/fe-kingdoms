@@ -6,7 +6,7 @@ from server import decode
 E=ROOT/'evidence'
 
 def invoke(mode,difficulty,actions,scenario=0):
-    wire=f'5 {mode} {difficulty} {scenario} {len(actions)}\n'+''.join(' '.join(map(str,a))+'\n' for a in actions)
+    wire=f'6 {mode} {difficulty} {scenario} {len(actions)}\n'+''.join(' '.join(map(str,a))+'\n' for a in actions)
     start=time.perf_counter()
     p=subprocess.run([str(ROOT/'out/kingdom')],input=wire,text=True,capture_output=True,timeout=30,check=True)
     return decode(p.stdout),time.perf_counter()-start
@@ -29,7 +29,7 @@ def match(name,levels,scenario=0,max_actions=24):
     assert {k:v for k,v in replay['state'].items() if k not in ('nodes','depth')}=={k:v for k,v in data['state'].items() if k not in ('nodes','depth')}
     status='completed' if data['state']['result'] else 'paused'
     reason='game_result' if status=='completed' else 'round_decision' if data['state']['decisionPending'] else 'trace_capacity' if data['state']['traceCapacityReached'] else 'test_action_budget'
-    (E/(name+'.json')).write_text(json.dumps({'version':5,'scenario':scenario,'difficulty':levels[1],'actions':actions},indent=2))
+    (E/(name+'.json')).write_text(json.dumps({'version':6,'scenario':scenario,'difficulty':levels[1],'actions':actions},indent=2))
     result={'name':name,'scenario':scenario,'levels':levels,'status':status,'stop_reason':reason,'result':data['state']['result'],'turn':data['state']['turn'],'actions':len(actions),'specialist_orders':sum(5<=a[0]<=8 for a in actions),'seconds':sum(durations),'max_action_seconds':max(durations,default=0),'replay_exact':True,'decisions':turns}
     (E/(name+'-result.json')).write_text(json.dumps(result,indent=2))
     print(json.dumps({k:v for k,v in result.items() if k!='decisions'}),flush=True)
@@ -41,7 +41,7 @@ def main():
     for name,levels in [('easy-easy',[0,0]),('hard-easy',[1,0]),('easy-hard',[0,1]),('hard-hard',[1,1])]:
         results.append(match(name,levels))
     for scenario in (1,2):results.append(match(f'map-{scenario}-easy-easy',[0,0],scenario))
-    malformed=['','5 0 0 0 0 extra','5 0 0 0 1 0 0 0','5 0 0 0 1 1 0 14 4','5 0 0 0 2049','5 0 0 0 1 2 0 0 4294967296','5 0 0 0 -1','99 0 0 0 0','5 0 0 9 0','5 1 0 0 0 '+' '*131072]
+    malformed=['','6 0 0 0 0 extra','6 0 0 0 1 0 0 0','6 0 0 0 1 1 0 14 4','6 0 0 0 2049','6 0 0 0 1 2 0 0 4294967296','6 0 0 0 -1','99 0 0 0 0','6 0 0 9 0','6 1 0 0 0 '+' '*131072]
     for wire in malformed:
         p=subprocess.run([str(ROOT/'out/kingdom')],input=wire,text=True,capture_output=True,timeout=5)
         assert p.returncode==2 and not p.stdout,(wire[:100],p.returncode,p.stdout)
