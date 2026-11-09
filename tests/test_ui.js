@@ -7,13 +7,13 @@ const get=id=>{if(!elements.has(id))elements.set(id,element());return elements.g
 const legacySaved=JSON.stringify({version:1,difficulty:0,actions:[[0,0,0,0]]});
 const previousSaved=JSON.stringify({version:2,scenario:0,difficulty:0,actions:[[0,0,0,0]]});
 const campaignSaved=JSON.stringify({version:3,scenario:0,difficulty:0,actions:[[0,0,0,0]]});
-const storage=new Map([['fe-kingdoms-v1',legacySaved],['fe-kingdoms-v2',previousSaved],['fe-kingdoms-v3',campaignSaved],['fe-kingdoms-v4',JSON.stringify({version:4,scenario:0,difficulty:0,actions:[[0,0,0,0]]})]]);
+const storage=new Map([['fe-kingdoms-v1',legacySaved],['fe-kingdoms-v2',previousSaved],['fe-kingdoms-v3',campaignSaved],['fe-kingdoms-v4',JSON.stringify({version:4,scenario:0,difficulty:0,actions:[[0,0,0,0]]})],['fe-kingdoms-v5',JSON.stringify({version:5,scenario:0,difficulty:0,actions:[[0,0,0,0]]})]]);
 let fetches=0,accept=false,response,requests=[],confirmations=[];
 const context=vm.createContext({document:{getElementById:get,querySelectorAll:()=>[...elements.values()],createElement:element},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},confirm:message=>{confirmations.push(message);return accept},fetch:async(url,options)=>{fetches++;requests.push(JSON.parse(options.body));return response},console,setTimeout,URL,Blob});
 vm.runInContext(html.split('<script>')[1].split('</script>')[0],context);
 const run=s=>vm.runInContext(s,context),pass=[0,0,0,0],recruit=[2,0,0,2],move=[1,0,1,4],badAttack=[1,1,2,1];
 const preview={foodCost:2,food1After:10,food2After:12,settlementAfter:0,index:1,outcome:4,cost:3,sourceTroops:7,targetTroops:7,targetOwner:1,nextSide:1,nextOrders:1,result:0,defense:0};
-const start={version:4,difficulty:0,economy:[{side:1,food:12,goldIncome:3,foodProduction:3,foodUpkeep:3,foodNet:0,disconnectedTiles:0,shortageLossesNextTurn:0},{side:2,food:12,goldIncome:3,foodProduction:3,foodUpkeep:3,foodNet:0,disconnectedTiles:0,shortageLossesNextTurn:0}],map:{width:5,height:3,count:15,topology:1,scenario:0,blueCapital:0,redCapital:14,orderBudget:2,maxTurns:120},state:{side:1,orders:2,turn:1,result:0,gold1:8,gold2:8,nodes:0,depth:1},tiles:Array.from({length:15},(_,index)=>({index,q:index%5,r:Math.floor(index/5),owner:[0,1,5].includes(index)?1:0,troops:index===0?5:1,infantry:index===0?5:1,cavalry:0,siege:0,fort:0,supplied:1,settlement:index===5?1:0,passable:1,upkeep:index===0?2:0,terrain:index===0?4:0})),legal:[pass,recruit,move,badAttack],previews:[{index:0,outcome:0},preview,{index:2,outcome:1,sourceTroops:1,targetTroops:5},{index:3,outcome:3,sourceTroops:1,targetTroops:1,defense:1}],actions:[]};
+const start={version:5,difficulty:0,economy:[{side:1,food:12,goldIncome:3,foodProduction:3,foodUpkeep:3,foodNet:0,disconnectedTiles:0,shortageLossesNextTurn:0},{side:2,food:12,goldIncome:3,foodProduction:3,foodUpkeep:3,foodNet:0,disconnectedTiles:0,shortageLossesNextTurn:0}],map:{width:5,height:3,count:15,topology:1,scenario:0,blueCapital:0,redCapital:14,orderBudget:2,baseRoundLimit:60,extensionRounds:20,traceCapacity:2048},state:{side:1,orders:2,turn:1,result:0,completedRounds:0,roundLimit:60,decisionPending:0,traceCapacityReached:0,gold1:8,gold2:8,nodes:0,depth:1},tiles:Array.from({length:15},(_,index)=>({index,q:index%5,r:Math.floor(index/5),owner:[0,1,5].includes(index)?1:0,troops:index===0?5:1,infantry:index===0?5:1,cavalry:0,siege:0,fort:0,supplied:1,settlement:index===5?1:0,passable:1,upkeep:index===0?2:0,terrain:index===0?4:0})),legal:[pass,recruit,move,badAttack],previews:[{index:0,outcome:0},preview,{index:2,outcome:1,sourceTroops:1,targetTroops:5},{index:3,outcome:3,sourceTroops:1,targetTroops:1,defense:1}],actions:[]};
 function setGame(value){run('game='+JSON.stringify(value)+';render();')}
 function reply(value){response={ok:true,json:async()=>JSON.parse(JSON.stringify(value))};}
 function openCards(){return get('actions').children.filter(e=>e.className==='territory open')}
@@ -26,8 +26,8 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  get('file').files=[{size:10,text:async()=>{throw Error('read failed')}}];await get('file').onchange();assert.equal(run('selected'),5);assert.match(get('error').textContent,/read failed/);assert.equal(run('busy'),false);
  await run("load('{bad')");assert.equal(fetches,0);
  response={ok:false,json:async()=>({error:'Fe rejected'})};await run('load('+JSON.stringify(storage.get('fe-kingdoms-v2'))+')');assert.equal(run('selected'),5);assert.equal(run('game.actions.length'),1);
- // New games are v4; hierarchy is immediately present even without preselection.
- accept=true;reply(start);await get('new').onclick();assert.equal(run('selected'),null);assert.equal(requests.at(-1).version,4);assert.equal(requests.at(-1).mode,1);
+ // New games are v5; hierarchy is immediately present even without preselection.
+ accept=true;reply(start);await get('new').onclick();assert.equal(run('selected'),null);assert.equal(requests.at(-1).version,5);assert.equal(requests.at(-1).mode,1);
  assert.match(get('turn-guide').textContent,/orders TOTAL/);assert.match(get('opening-hint').textContent,/Open village A2.*2 food.*order 1.*B2.*order 2/);
  assert.equal(get('actions').children.length,3);assert.equal(openCards().length,0);assert.equal(get('global-actions').children.length,1);
  let before=fetches;get('actions').children[0].children[0].onclick();assert.equal(run('selected'),0);assert.equal(openCards().length,1);assert.equal(orderButtons(openCards()[0]).length,2);assert.equal(fetches,before);
@@ -37,28 +37,28 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  // True axial geometry, not a rectangular grid with clipped corners.
  assert.equal(get('board').children[0].style.left,'0px');assert.equal(get('board').children[5].style.left,'74px');assert.equal(get('board').children[5].style.top,'128px');assert.equal(get('board').children[10].style.left,'148px');
  const first={...start,state:{...start.state,orders:1,gold1:3},actions:[recruit]};reply(first);await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');
- assert.equal(requests.at(-1).version,4);assert.equal(requests.at(-1).mode,1);assert.equal(run('game.state.orders'),1);assert.match(get('turn-guide').textContent,/Red has not moved/);assert.equal(get('opening-hint').textContent,'');
+ assert.equal(requests.at(-1).version,5);assert.equal(requests.at(-1).mode,1);assert.equal(run('game.state.orders'),1);assert.match(get('turn-guide').textContent,/Red has not moved/);assert.equal(get('opening-hint').textContent,'');
  const second={...first,state:{...first.state,side:2,orders:2,turn:2,gold2:8},actions:[recruit,move]};reply(second);before=fetches;await run('perform('+JSON.stringify(move)+','+JSON.stringify(start.previews[2])+')');
  assert.equal(fetches,before+1);assert.equal(requests.at(-1).mode,1);assert.equal(get('global-actions').children[0].textContent,'Run computer turn');
- const ai=[2,9,9,2],next={...start,state:{...start.state,turn:3,gold1:5,gold2:5},actions:[recruit,move,ai]};reply(next);await get('global-actions').children[0].onclick();assert.equal(requests.at(-1).mode,0);assert.match(get('activity').textContent,/Computer: 1. Recruit/);assert.match(get('status').textContent,/Round 2/);
+ const ai=[2,9,9,2],next={...start,state:{...start.state,turn:3,completedRounds:1,gold1:5,gold2:5},actions:[recruit,move,ai]};reply(next);await get('global-actions').children[0].onclick();assert.equal(requests.at(-1).mode,0);assert.match(get('activity').textContent,/Computer: 1. Recruit/);assert.match(get('status').textContent,/Completed rounds: 1 \/ 60/);
  accept=false;before=fetches;await run('perform('+JSON.stringify(pass)+',game.previews[0])');assert.equal(fetches,before);assert.match(confirmations.at(-1),/give up 2/);
  await run('perform('+JSON.stringify(badAttack)+','+JSON.stringify(start.previews[3])+')');assert.equal(fetches,before);assert.match(confirmations.at(-1),/all 1 attackers lost/);
  assert.match(run('forecast([0,0,0,0],{outcome:0,result:3})'),/ends the match in a draw/i);assert.match(run('forecast([1,13,14,8],{outcome:2,result:1})'),/wins the match immediately/);
- // Loading v4 on Red still pauses. Legacy loads are read-only and preserve BOTH checkpoints.
- reply(second);await run('load('+JSON.stringify(JSON.stringify({version:4,scenario:0,difficulty:0,actions:second.actions}))+')');assert.equal(run('selected'),null);assert.equal(get('global-actions').children[0].textContent,'Run computer turn');
- const hexSaved=storage.get('fe-kingdoms-v4'),legacy={...start,tiles:untypedTiles(),economy:[],version:1,map:{...start.map,topology:0},actions:[pass]};reply(legacy);await get('legacy').onclick();assert.equal(requests.at(-1).version,1);assert.equal(requests.at(-1).mode,1);assert.equal(storage.get('fe-kingdoms-v1'),legacySaved);assert.equal(storage.get('fe-kingdoms-v4'),hexSaved);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v2'),previousSaved);assert.match(get('turn-guide').textContent,/read.only|original square rules/i);assert.match(get('global-actions').children[0].textContent,/Read-only/);assert.equal(get('board').children[5].style.left,'0px');assert.equal(get('board').children[5].style.top,'172px');
+ // Loading v5 on Red still pauses. Legacy loads are read-only and preserve BOTH checkpoints.
+ reply(second);await run('load('+JSON.stringify(JSON.stringify({version:5,scenario:0,difficulty:0,actions:second.actions}))+')');assert.equal(run('selected'),null);assert.equal(get('global-actions').children[0].textContent,'Run computer turn');
+ const hexSaved=storage.get('fe-kingdoms-v5'),legacy={...start,tiles:untypedTiles(),economy:[],version:1,map:{...start.map,topology:0},actions:[pass]};reply(legacy);await get('legacy').onclick();assert.equal(requests.at(-1).version,1);assert.equal(requests.at(-1).mode,1);assert.equal(storage.get('fe-kingdoms-v1'),legacySaved);assert.equal(storage.get('fe-kingdoms-v5'),hexSaved);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v2'),previousSaved);assert.match(get('turn-guide').textContent,/read.only|original square rules/i);assert.match(get('global-actions').children[0].textContent,/Read-only/);assert.equal(get('board').children[5].style.left,'0px');assert.equal(get('board').children[5].style.top,'172px');
  before=fetches;await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(fetches,before);assert.equal(run('replay().version'),1);
- // v2 is also read-only, retaining its own rules/checkpoint and the v4 save.
- const previous={...start,tiles:untypedTiles(),economy:[],version:2,actions:[pass]};reply(previous);await get('previous').onclick();assert.equal(requests.at(-1).version,2);assert.equal(storage.get('fe-kingdoms-v4'),hexSaved);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v2'),previousSaved);assert.equal(run('replay().version'),2);assert.match(get('status').textContent,/v2 hex replay/);
+ // v2 is also read-only, retaining its own rules/checkpoint and the v5 save.
+ const previous={...start,tiles:untypedTiles(),economy:[],version:2,actions:[pass]};reply(previous);await get('previous').onclick();assert.equal(requests.at(-1).version,2);assert.equal(storage.get('fe-kingdoms-v5'),hexSaved);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v2'),previousSaved);assert.equal(run('replay().version'),2);assert.match(get('status').textContent,/v2 hex replay/);
  before=fetches;await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(fetches,before);
- // v3 campaigns retain economy but do not invent role counts or overwrite the v4 save.
- const campaign={...start,tiles:untypedTiles(),version:3,actions:[pass]};reply(campaign);await get('campaign').onclick();assert.equal(requests.at(-1).version,3);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v4'),hexSaved);assert.equal(run('replay().version'),3);assert.match(get('status').textContent,/v3 campaign replay/);assert.equal(get('economy').children.length,2);run('selected=0;render()');assert.doesNotMatch(get('territory-detail').textContent,/Infantry/);
+ // v3 campaigns retain economy but do not invent role counts or overwrite the v5 save.
+ const campaign={...start,tiles:untypedTiles(),version:3,actions:[pass]};reply(campaign);await get('campaign').onclick();assert.equal(requests.at(-1).version,3);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v5'),hexSaved);assert.equal(run('replay().version'),3);assert.match(get('status').textContent,/v3 campaign replay/);assert.equal(get('economy').children.length,2);run('selected=0;render()');assert.doesNotMatch(get('territory-detail').textContent,/Infantry/);
  before=fetches;await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(fetches,before);
  // All three map choices use engine dimensions and retain their scenario in saves.
  accept=true;
  for(const [scenario,width,height] of [[0,5,3],[1,7,5],[2,9,5]]){
   const mapped={...start,map:{...start.map,scenario,width,height,count:width*height,redCapital:width*height-1},tiles:Array.from({length:width*height},(_,index)=>({...start.tiles[0],index,q:index%width,r:Math.floor(index/width),owner:[0,1,width].includes(index)?1:0,terrain:index===0?4:0}))};
-  get('scenario').value=String(scenario);reply(mapped);await get('new').onclick();assert.equal(requests.at(-1).scenario,scenario);assert.equal(requests.at(-1).version,4);assert.equal(get('board').children.length,width*height);assert.equal(run('replay().scenario'),scenario);assert.match(get('goal').textContent,new RegExp(String.fromCharCode(64+width)+height));assert.equal(get('board').children[width].style.left,'74px');
+  get('scenario').value=String(scenario);reply(mapped);await get('new').onclick();assert.equal(requests.at(-1).scenario,scenario);assert.equal(requests.at(-1).version,5);assert.equal(get('board').children.length,width*height);assert.equal(run('replay().scenario'),scenario);assert.match(get('goal').textContent,new RegExp(String.fromCharCode(64+width)+height));assert.equal(get('board').children[width].style.left,'74px');
  }
  // Economy, warnings and forecasts display Fe values, not browser calculations.
  const resource={...start,economy:[{side:1,food:4,goldIncome:7,foodProduction:17,foodUpkeep:9,foodNet:8,disconnectedTiles:2,shortageLossesNextTurn:3}],tiles:start.tiles.map(t=>t.index===2?{...t,terrain:5,passable:0,troops:0}:t)};setGame(resource);
@@ -107,6 +107,62 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  setGame({...capped,economy:[{...capped.economy[0],projectedFood:31}]});
  assert.equal(get('economy').children[0].children[0].children[1].children[0].value,31);
  setGame({...start,version:3,tiles:untypedTiles()});run('selected=0;render()');assert.equal(openCards()[0].children[1].children.some(e=>e.className==='role-guide'),false);assert.equal(get('board').children[0].children[0].children[3].children[0].attrs['aria-label'],'troops: 5');
+ // v4 mixed-army replays remain inspectable/exportable without touching any checkpoint.
+ const allCheckpoints=new Map(storage),mixed={...start,version:4,actions:[recruit],map:{...start.map,maxTurns:120}};
+ reply(mixed);await get('roles').onclick();assert.equal(requests.at(-1).version,4);assert.equal(requests.at(-1).mode,1);
+ assert.equal(run('replay().version'),4);assert.match(get('status').textContent,/Legacy v4 campaign replay/);assert.doesNotMatch(get('status').textContent,/Completed rounds/);
+ for(const [key,value] of allCheckpoints)assert.equal(storage.get(key),value);
+ before=fetches;await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(fetches,before);
+ assert.equal(get('roles').hidden,false);assert.equal(get('save').disabled,false);
+ // Thresholds and progress are Fe data, including deliberately nonstandard values.
+ for(const [scenario,limit] of [[0,60],[1,120],[2,180],[0,73]]){
+  setGame({...start,map:{...start.map,scenario,baseRoundLimit:limit},state:{...start.state,roundLimit:limit,completedRounds:17}});
+  assert.ok(get('status').textContent.includes('Completed rounds: 17 / '+limit));
+  assert.ok(get('status').textContent.includes((limit-17)+' rounds until next decision'));
+ }
+ const extend=[9,0,0,0],draw=[10,0,0,0];
+ const boundary={...start,state:{...start.state,side:2,orders:0,turn:120,completedRounds:60,roundLimit:60,decisionPending:1},actions:[recruit,move],legal:[extend,draw],previews:[{index:0,result:0},{index:1,result:3}]};
+ setGame(boundary);run('selected=0;render()');before=fetches;
+ assert.match(get('status').textContent,/Round limit reached.*Completed rounds: 60 \/ 60.*0 rounds until/);
+ assert.match(get('turn-guide').textContent,/No next-turn income or orders/);
+ assert.equal(get('order-guide').hidden,true);assert.equal(get('global-actions').children.length,2);assert.match(get('global-actions').children[0].children[0].textContent,/Extend by 20 rounds.*campaign decision/);
+ assert.doesNotMatch(get('global-actions').children[0].children[0].textContent,/1 order/);
+ assert.match(get('global-actions').children[0].children[1].textContent,/20 rounds.*Red does not move automatically/);
+ assert.match(get('global-actions').children[1].children[0].textContent,/Accept draw/);assert.equal(orderButtons(openCards()[0]).length,0);
+ assert.equal(get('board').children[0].className.includes('recent'),true); // Last real move still highlighted.
+ await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(fetches,before);
+ accept=false;await get('global-actions').children[1].onclick();assert.equal(fetches,before);assert.match(confirmations.at(-1),/Accept a draw.*recorded/);
+ // An extension is one recorded explicit request. Rapid double clicks cannot repeat it or run Red.
+ const extended={...start,state:{...start.state,turn:121,completedRounds:60,roundLimit:80,gold1:19},actions:[...boundary.actions,extend]};
+ get('activity').textContent='Computer: Round limit reached; choose whether to extend or draw.';reply(extended);const clicked=get('global-actions').children[0],pendingExtension=clicked.onclick();await clicked.onclick();await pendingExtension;
+ assert.equal(fetches,before+1);assert.equal(requests.at(-1).mode,1);assert.deepEqual(requests.at(-1).actions.at(-1),extend);
+ assert.equal(get('activity').textContent,'');assert.equal(get('order-guide').hidden,false);assert.equal(run('game.state.gold1'),19);assert.equal(run('game.state.orders'),2);assert.equal(run('game.state.side'),1);
+ assert.match(get('status').textContent,/60 \/ 80.*20 rounds until/);assert.match(get('human-activity').textContent,/Extended.*20 rounds/);
+ assert.doesNotMatch(get('board').children[0].className,/recent/);assert.equal(get('global-actions').children.length,1);
+ before=fetches;await run('perform([9,0,0,0],{})');assert.equal(fetches,before);
+ // Loading a boundary never runs Red or resolves the decision; only Fe legal options are rendered.
+ reply(boundary);await run('load('+JSON.stringify(JSON.stringify({version:5,scenario:0,difficulty:0,actions:boundary.actions}))+')');
+ assert.equal(fetches,before+1);assert.equal(requests.at(-1).mode,1);assert.equal(get('global-actions').children.length,2);
+ setGame({...boundary,legal:[draw],previews:[{result:3}]});assert.equal(get('global-actions').children.length,1);assert.match(get('global-actions').children[0].children[0].textContent,/Accept draw/);
+ setGame(boundary);accept=true;const drawn={...boundary,state:{...boundary.state,result:3,decisionPending:0},actions:[...boundary.actions,draw],legal:[],previews:[]};reply(drawn);
+ await get('global-actions').children[1].onclick();assert.equal(requests.at(-1).mode,1);assert.deepEqual(requests.at(-1).actions.at(-1),draw);assert.match(get('status').textContent,/Draw:/);assert.match(get('turn-guide').textContent,/Match complete/);
+ // Capacity is a technical pause, even if reached at a decision boundary; result wins priority.
+ const full={...boundary,state:{...boundary.state,traceCapacityReached:1},legal:[],previews:[]};setGame(full);run('selected=0;render()');
+ assert.match(get('status').textContent,/Replay capacity reached: play paused/);assert.doesNotMatch(get('status').textContent,/Draw:/);
+ assert.match(get('turn-guide').textContent,/match has not ended.*Save replay/);assert.match(get('global-actions').children[0].textContent,/2048 recorded actions/);
+ assert.equal(orderButtons(openCards()[0]).length,0);assert.equal(get('save').disabled,false);before=fetches;
+ await run('perform([9,0,0,0],{})');await run('perform([10,0,0,0],{})');assert.equal(fetches,before);
+ for(const result of [1,2,3]){setGame({...full,state:{...full.state,result}});assert.match(get('turn-guide').textContent,/Match complete/);assert.doesNotMatch(get('status').textContent,/play paused/);}
+ // Red's request stops at the boundary and reports the choice, never a ready Blue turn.
+ setGame(second);reply({...boundary,actions:[...second.actions,ai]});before=fetches;await get('global-actions').children[0].onclick();
+ assert.equal(fetches,before+1);assert.match(get('activity').textContent,/Round limit reached/);assert.doesNotMatch(get('activity').textContent,/Your turn is ready/);assert.equal(get('global-actions').children.length,2);
+ setGame(second);reply({...full,actions:[...second.actions,ai]});await get('global-actions').children[0].onclick();assert.match(get('activity').textContent,/Replay capacity reached/);assert.doesNotMatch(get('activity').textContent,/Match ended|Your turn is ready/);
+ // Failed decisions preserve the position and successful checkpoint, allowing a deliberate retry.
+ setGame(boundary);const savedBefore=storage.get('fe-kingdoms-v5');response={ok:false,json:async()=>({error:'Decision rejected'})};
+ await get('global-actions').children[0].onclick();assert.equal(run('game.state.decisionPending'),1);assert.equal(storage.get('fe-kingdoms-v5'),savedBefore);assert.equal(run('busy'),false);assert.match(get('error').textContent,/Decision rejected/);
+ // New byte ceiling is inclusive; oversized files are rejected before reading or transport.
+ before=fetches;let reads=0;get('file').files=[{size:262145,text:async()=>{reads++;return '{}'}}];await get('file').onchange();assert.equal(reads,0);assert.equal(fetches,before);assert.match(get('error').textContent,/too large/);
+ reply(start);get('file').files=[{size:262144,text:async()=>{reads++;return JSON.stringify({version:5,scenario:0,difficulty:0,actions:[]})}}];await get('file').onchange();assert.equal(reads,1);assert.equal(fetches,before+1);assert.equal(requests.at(-1).version,5);
  const old={...start};delete old.previews;setGame(old);assert.doesNotThrow(()=>run('render()'));assert.equal(run('busy'),false);
- console.log('UI unit tests passed: axial hex geometry, one-open owned-territory hierarchy, forecast indexing, explicit turns, confirmations and v4 role forecasts, campaign economy/maps and isolated v1/v2/v3/v4 replay checkpoints.');
+ console.log('UI unit tests passed: axial hex geometry, one-open owned-territory hierarchy, forecast indexing, explicit turns, confirmations and v5 role forecasts, campaign economy/maps and isolated v1/v2/v3/v4/v5 replay checkpoints.');
 })().catch(e=>{console.error(e);process.exitCode=1});

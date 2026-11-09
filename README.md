@@ -1,23 +1,23 @@
 # Fe Kingdoms
 
-A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current source milestone is **rules version 4: hex campaigns and mixed armies**. The browser and Python adapter only display and transport Fe results.
+A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current source milestone is **rules version 5: map-size campaigns with explicit continuation**. The browser and Python adapter only display and transport Fe results.
 
-## Isolated visual preview
+## Isolated campaign preview
 
-The visual-map branch is developed in `C:\Users\Eric\dev\fe-kingdoms-visual` and served at http://localhost:8766. It does not replace the active game on port 8765. Run `scripts/preview.ps1` from this checkout to start or locate that separate preview. Do not use the ordinary launcher to switch the live game during a match.
+The campaign-expansion branch is developed in `C:\Users\Eric\dev\fe-kingdoms-campaign` with its separate preview reserved at http://localhost:8767. It does not replace the active game on ports 8765 and 8766. Run `scripts/preview.ps1` from this checkout to start or locate that separate preview. Do not use the ordinary launcher to switch the live game during a match.
 
-Browser saves are separate for each port. To copy a current game into the preview, use **Save replay** in the original game and **Load replay** in the preview. The original checkpoint remains untouched. No game rules or replay version change is required for this presentation-only branch.
+Browser saves are separate for each port. To copy a current game into the preview, use **Save replay** in the original game and **Load replay** in the preview. The original checkpoint remains untouched. New games use v5. Existing v4 matches remain exact read-only replays; they are never silently converted.
 
 ## Play and verify
 
 From PowerShell, with Docker Desktop running and the existing pinned toolchain image available:
 
 ```powershell
-Set-Location C:\Users\Eric\dev\fe-kingdoms
-.\launch.ps1
+Set-Location C:\Users\Eric\dev\fe-kingdoms-campaign
+.\scripts\preview.ps1
 ```
 
-Open http://localhost:8765. The launcher recognizes a running `fe-kingdoms` container; stop it with `docker stop fe-kingdoms` before rebuilding. During development, the already-running instance may deliberately remain on the previous reviewed milestone while new rules are tested.
+Open the URL reported by the preview launcher. Existing instances on 8765 and 8766 remain on their reviewed versions while this checkout is tested.
 
 Run all automated checks with `scripts/verify.ps1`. It uses local Node for UI unit tests and the pinned offline Fe/Python Docker image. Results and exact replays are regenerated under ignored `evidence/`; a test result must say `passed`, not `running` or `failed`.
 
@@ -40,20 +40,20 @@ On the small map, try selecting A2, recruiting two troops, then moving two from 
 - Infantry attacks/defends at one. Cavalry adds one attack power on plain/farm targets. Siege adds two attack power against forts, settlements or capitals. All units defend at one; forts and hills/passes add defense. Attack power must strictly exceed defense. Fe shows exact casualties and remaining composition before each order.
 - Supplied towns recruit one cavalry for four gold/two food or one siege for five gold/three food. They can also train one existing infantry into that specialist at the same cost, keeping total units unchanged. This explicit paid training works at the stack cap.
 - Moving detachments are proportional after reserving a garrison. Casualties remove infantry first, then cavalry, then siege. The rules remain deterministic; no random combat or hidden bonuses.
-- Capture the enemy capital for immediate victory. Four consecutive pass actions or completion of 120 side turns draws the match.
+- Capture the enemy capital for immediate victory. Four consecutive pass actions draw the match. Small/medium/large campaigns pause after 60/120/180 full rounds. Choose Extend 20 rounds or Accept draw; extension begins the deferred Blue turn exactly once.
 - Easy uses one-ply greedy evaluation; Hard uses bounded four-ply beam alpha-beta search. Their rules and resources are identical, without hidden bonuses.
 
 ## Saves and compatibility
 
-Save replay exports the accepted action sequence, version, scenario and difficulty. Fe validates every recorded action when loading. Version-1 square saves, version-2 basic-hex saves and version-3 infantry-campaign saves load through frozen engines **read-only**. They are never silently migrated. Each rules version has a separate browser checkpoint; loading an old replay does not replace the current one. Export replays to keep multiple games.
+Save replay exports the accepted action sequence, version, scenario and difficulty. Up to 2,048 actions are supported, including campaign decisions. At capacity, play pauses for export without declaring a draw; export does not itself increase this version's capacity. Fe validates every recorded action when loading. Version-1 square saves, version-2 basic-hex saves, version-3 infantry-campaign saves and version-4 mixed-army saves load through frozen engines **read-only**. They are never silently migrated. Each rules version has a separate browser checkpoint; loading an old replay does not replace the current one. Export replays to keep multiple games.
 
 ## Current verification and balance limits
 
 The campaign milestone has directed Fe tests for maps, routes, economy, supply, settlements, bounds and opponent determinism, plus adapter/UI/replay/full-match checks. See `docs/validation.md` and the latest generated evidence for actual results.
 
-The v3 campaign exposed defensive stalls: fortified passes could exceed the largest infantry attack. V4 provides explicit siege recruitment/training and mixed-army attacks. Both policies pass tactical tests for training and breaching a full fortified frontier. This does not guarantee every bot match becomes decisive. Human-versus-computer is the intended use; draw triggers are unchanged. A fresh human playtest is needed to assess enjoyment and difficulty.
+The v3 campaign exposed defensive stalls: fortified passes could exceed the largest infantry attack. V4 provides explicit siege recruitment/training and mixed-army attacks. Both policies pass tactical tests for training and breaching a full fortified frontier. This does not guarantee every bot match becomes decisive. Human-versus-computer is the intended use. V5 replaces automatic time draws with explicit continuation; four-pass draws remain. A fresh human playtest is needed to assess enjoyment and difficulty.
 
-Eric playtested the original square game. The subsequent UI/campaign changes need a new human playtest. Mocked UI tests and HTTP tests do not establish visual browser correctness or enjoyment. The visual preview has partial real-browser coverage (small-map rendering, selection and first recruitment); final layout fixes and large-map zoom still need a human check. See docs/validation.md for the exact boundary.
+Eric playtested the original square game and the large-map visual v4 preview. He found the latter fun and challenging, but the sixty-round cap interrupted active fighting. V5 continuation needs a fresh human playtest. Mocked UI tests and HTTP tests do not establish visual browser correctness or enjoyment. The earlier visual preview has partial real-browser coverage (small-map rendering, selection and first recruitment); final layout fixes and large-map zoom still need a human check. See docs/validation.md for the exact boundary.
 
 ## Learn the implementation
 

@@ -15,3 +15,12 @@ The user wants medieval Risk with meaningful resource management and little book
 Retest clarity and enjoyment with a human. Small deterministic bot tournaments catch regressions but do not establish a fun or well-balanced game. Compare order-budget or planning-phase alternatives only if playtest feedback supports them. Water, roads and further economic systems remain optional ideas, not a requirement to add everything at once.
 
 The local game stays separate from any Unreal exploration. No remote Git, public publishing, deployment or package registration is authorized by this work. Commit coherent local milestones with their decisions and verification evidence. Stop and report if reliable agent allowance reaches 25% remaining.
+
+
+## Authorized next campaign slice
+
+The next isolated milestone introduces map-size round-review points and explicit continuation, then rivers with fixed bridge crossings and Fe-backed supply previews. Preserve current opponent policies while keeping them competent with the new rules; defer final difficulty calibration until the next mechanics batch settles.
+
+Buildable/destroyable bridges and forests harvested for construction materials are candidate future mechanics from the user, not committed scope for the fixed-crossing slice. Such changes would affect both kingdoms' movement, supply and planning. Town specialties and distinct troop movement remain later candidates where they create useful decisions. Prefer small shared terrain/unit definitions when repeated rules justify them; do not introduce a generic game framework.
+
+5. **Implemented and verified in v5:** map-size review points (60/120/180 full rounds), explicit twenty-round continuation or accepted draw, frozen v4 replay and larger bounded traces. See ADR 0009. Final difficulty calibration remains deferred. Next: fixed rivers/bridges and exact Fe-backed supply previews.

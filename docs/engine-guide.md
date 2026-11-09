@@ -1,6 +1,6 @@
 # A guided tour of the Fe engine
 
-This guide describes the **version 4 mixed-army campaign engine**. Start with the ideas below, then follow the named functions. You do not need to understand every Fe language feature before understanding the game. Read the decision records alongside this guide for why the rules evolved; this is a tour of the current implementation, not a claim that balance work is finished.
+This guide describes the **version 5 campaign engine**. Start with the ideas below, then follow the named functions. You do not need to understand every Fe language feature before understanding the game. Read the decision records alongside this guide for why the rules evolved; this is a tour of the current implementation, not a claim that balance work is finished.
 
 ## 1. The useful mental model
 
@@ -31,7 +31,7 @@ Start with `State`, `Action` and `Actions` in `src/engine.fe`.
 
 - `State` holds tile ownership, total troops, cavalry, siege, forts and settlements; both kingdoms' gold/food; and scenario/turn information.
 - Arrays have fixed capacities: 64 tile slots and 1,024 legal actions. `tile_count` selects the active cells; the largest current map uses 45.
-- `Action` has `kind`, `from`, `to`, `amount`. Kinds 0..4 mean pass, move, recruit infantry, fortify and build/upgrade settlement. Kinds 5/6 recruit cavalry/siege; kinds 7/8 explicitly train one existing infantry into cavalry/siege.
+- `Action` has `kind`, `from`, `to`, `amount`. Kinds 0..4 mean pass, move, recruit infantry, fortify and build/upgrade settlement. Kinds 5/6 recruit cavalry/siege; kinds 7/8 explicitly train one existing infantry into cavalry/siege. Kinds 9/10 are the global extend-campaign and accept-draw decisions.
 - `Actions.len` marks how much of its fixed array is populated.
 
 A few Fe features used here:
@@ -108,9 +108,9 @@ Beam limits keep work bounded but do not guarantee optimal play. Stable ordering
 
 ## 8. Native boundaries and tests
 
-The parser in `src/native.fe` rejects malformed numbers, overflow, extra fields, inputs over 16,384 bytes and traces over 240 actions. Version 4 retains the scenario field and adds army composition to tile and forecast output. Browser modes are 1 (replay only) and 0 (computer response); headless modes 2 and 3 support full self-play and one Fe-selected action.
+The parser in `src/native.fe` rejects malformed numbers, overflow, extra fields, inputs over 131,072 bytes and traces over 2,048 actions. Version 5 retains the scenario and army composition fields, adding campaign-decision state and limits. Browser modes are 1 (replay only) and 0 (computer response); headless modes 2 and 3 support full self-play and one Fe-selected action.
 
-The host routes versions 1, 2 and 3 to frozen read-only replay executables, so old actions are not silently given new movement or economy semantics.
+The host routes versions 1, 2, 3 and 4 to frozen read-only replay executables, so old actions are not silently given new movement or economy semantics.
 
 `scripts/build.py` verifies the compiler hash, concatenates unchanged Fe source and calls `fe build --backend native`. It does not translate host-language game logic. `scripts/test_fe.py` combines the engine and `src/tests.fe` and runs native Fe tests. Broader verification adds transport, replay, full matches and UI units.
 
@@ -133,7 +133,7 @@ Native/HTTP tests and mocked UI tests do not establish visual browser correctnes
 
 ## Three small exercises
 
-Use the current built v4 executable from the project directory. These fresh headless positions do not alter a browser match or its saves.
+Use the current built v5 executable from the project directory. These fresh headless positions do not alter a browser match or its saves.
 
 ```powershell
 $p = (Get-Location).Path
@@ -143,15 +143,15 @@ $image = 'sha256:32e644f1599ac63427a9e545d643ad75adee6f14328c4b7d1be01e3bf728391
 ### 1. Find the initial state
 
 ```powershell
-'4 1 0 0 0' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
+'5 1 0 0 0' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
 ```
 
-The header means version 4, replay-only, Easy, small scenario, zero actions. Find tag 1 for turn/resources, tag 6 for map metadata, tag 7 for economy and tag 3 for legal actions. Compare with `initial(0)` and `economy`.
+The header means version 5, replay-only, Easy, small scenario, zero actions. Find tag 1 for turn/resources, tag 6 for map metadata, tag 7 for economy and tag 3 for legal actions. Compare with `initial(0)` and `economy`.
 
 ### 2. Separate your orders from Red's response
 
 ```powershell
-'4 1 0 0 2  2 5 5 2  1 5 6 2' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
+'5 1 0 0 2  2 5 5 2  1 5 6 2' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
 ```
 
 Tile 5 is A2 on the small map. This recruits there, then sends two troops to B2, spending both orders. Tag 1 shows Red to move; the accepted trace still has exactly two actions. Change only the header's second field from 1 to 0 and rerun: Fe adds Red's response. Follow the relevant branches in `run` and `apply`.
@@ -167,3 +167,10 @@ docker run --rm --network none -v "${p}:/work" -w /work $image python3 scripts/t
 This runs the native rule suite and writes generated test/build artifacts only. It does not edit rules or saves. Use `scripts/verify.ps1` for all project checks.
 
 When changing a rule, identify its authoritative Fe function, add a focused test and decide whether replay semantics require a new version. Then update the UI descriptions and relevant ADR.
+
+
+## V5 campaign boundary
+
+Read `base_round_limit`, `legal`, `apply` and the native `run` loop together. Fe tracks completed full rounds and the current limit. Red finishing the threshold round pauses before Blue's economy, with the match still ongoing. Only the two campaign decisions are legal then. Extension records an action, increases the limit by twenty and begins Blue's deferred turn; accepting the draw records the terminal decision. Search and automatic modes stop at this boundary.
+
+The native trace is bounded to 2,048 actions. Reaching capacity suppresses legal output but does not turn an unfinished match into a draw. The Python harness also has its own test budget, separate from Fe outcomes. Frozen v4 remains available for exact older replays.

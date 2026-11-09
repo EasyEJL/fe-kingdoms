@@ -224,10 +224,6 @@ fn capital_victory_and_stalemate() {
         s = initial(scenario)
         for _i in 0 .. 4 { s = apply(s, pass()) }
         assert(s.result == 3)
-        s = initial(scenario)
-        s.turn = 120
-        s = apply(s, pass())
-        assert(s.result == 3)
     }
 }
 #[test]
@@ -235,8 +231,9 @@ fn all_generated_orders_preserve_bounds() {
     for scenario in 0 .. 3 {
         var s = initial(scenario)
         var seed: usize = 17
-        for step in 0 .. 240 {
+        for step in 0 .. 2048 {
             if s.result != 0 { break }
+            if s.decision_pending { s = apply(s, extend_campaign()) }
             let choices = legal(s)
             assert(choices.len > 0 && choices.len < MAX_ACTIONS)
             if step < 20 {
@@ -246,7 +243,8 @@ fn all_generated_orders_preserve_bounds() {
             s = apply(s, choices.items[seed % choices.len])
             check_bounds(s)
         }
-        assert(s.result != 0)
+        // A bounded test budget is not a game-ending rule.
+        check_bounds(s)
     }
 }
 #[test]
@@ -466,5 +464,140 @@ fn both_policies_take_specialist_capital_wins() {
         var stats = Search { nodes: 0 }
         let action = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
         assert(apply(s, action).result == 1)
+    }
+}
+
+// CAMPAIGN BOUNDARIES: these use legal, reversible friendly moves rather than
+// consecutive passes, so long-run checks cannot accidentally test stalemate.
+fn cycle_order(_ s: State) -> Action {
+    let home = capital(s, s.side)
+    let nearby = if s.side == 1 { home + 1 } else { home - 1 }
+    if s.orders == 2 { Action { kind: 1, from: home, to: nearby, amount: 3 } }
+    else { Action { kind: 1, from: nearby, to: home, amount: 3 } }
+}
+fn campaign_boundary(_ scenario: usize) -> State {
+    var s = initial(scenario)
+    for _step in 0 .. 720 {
+        if s.decision_pending { break }
+        let action = cycle_order(s)
+        assert(is_legal(s, action))
+        s = apply(s, action)
+        check_bounds(s)
+    }
+    assert(s.decision_pending && s.result == 0)
+    s
+}
+#[test]
+fn scenario_boundaries_are_full_rounds_and_never_automatic_draws() {
+    for scenario in 0 .. 3 {
+        let s = campaign_boundary(scenario)
+        assert(s.completed_rounds == base_round_limit(scenario))
+        assert(s.round_limit == base_round_limit(scenario))
+        assert(s.turn == s.round_limit * 2 && s.side == 2 && s.orders == 0)
+        assert(s.passes == 0)
+        let choices = legal(s)
+        assert(choices.len == 2)
+        assert(same_action(choices.items[0], extend_campaign()))
+        assert(same_action(choices.items[1], accept_draw()))
+        assert(!is_legal(s, pass()) && !is_legal(s, cycle_order(s)))
+        assert(!is_legal(s, Action { kind: 9, from: 0, to: 0, amount: 1 }))
+        assert(!is_legal(initial(scenario), extend_campaign()))
+        assert(!is_legal(initial(scenario), accept_draw()))
+        let drawn = apply(s, accept_draw())
+        assert(drawn.result == 3 && !drawn.decision_pending && legal(drawn).len == 0)
+        assert(drawn.completed_rounds == s.completed_rounds && drawn.turn == s.turn)
+        assert(drawn.gold[1] == s.gold[1] && drawn.food[1] == s.food[1])
+    }
+}
+#[test]
+fn extension_pays_one_deferred_turn_without_spending_an_order() {
+    var s = campaign_boundary(0)
+    // Force uncapped resources and an isolated stack to expose double payment
+    // or duplicate attrition that capped resources alone would conceal.
+    s.gold[1] = 0
+    s.food[1] = 10
+    s.owner[8] = 1
+    s.troops[8] = 5
+    var expected = s
+    expected.side = 1
+    expected = begin_turn(expected)
+    let continued = apply(s, extend_campaign())
+    assert(continued.side == 1 && continued.orders == 2 && continued.turn == 121)
+    assert(continued.round_limit == 80 && continued.completed_rounds == 60)
+    assert(!continued.decision_pending && continued.result == 0)
+    assert(continued.gold[1] == expected.gold[1] && continued.food[1] == expected.food[1])
+    assert(continued.gold[2] == s.gold[2] && continued.food[2] == s.food[2])
+    assert(continued.troops[8] == 4)
+    assert(!is_legal(continued, extend_campaign()))
+    assert(!is_legal(continued, accept_draw()))
+}
+#[test]
+fn victory_and_four_passes_precede_round_decision() {
+    for scenario in 0 .. 3 {
+        var s = initial(scenario)
+        s.side = 2
+        s.orders = 1
+        s.turn = base_round_limit(scenario) * 2
+        s.completed_rounds = base_round_limit(scenario) - 1
+        s.passes = 3
+        let drawn = apply(s, pass())
+        assert(drawn.result == 3 && !drawn.decision_pending)
+        assert(drawn.completed_rounds == base_round_limit(scenario))
+        s.owner[1] = 2
+        s.troops[1] = 10
+        let attack = Action { kind: 1, from: 1, to: 0, amount: 9 }
+        assert(is_legal(s, attack))
+        let won = apply(s, attack)
+        assert(won.result == 2 && !won.decision_pending && legal(won).len == 0)
+        for difficulty in 0 .. 2 {
+            var stats = Search { nodes: 0 }
+            let chosen = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+            assert(apply(s, chosen).result == 2)
+        }
+    }
+}
+#[test]
+fn boundary_search_is_a_leaf_not_an_ai_campaign_vote() {
+    let s = campaign_boundary(0)
+    var stats = Search { nodes: 0 }
+    let score = with (Search = stats) { search(s, 3, 2, -200000, 200000) }
+    assert(score == evaluate(s, 2) && stats.nodes == 1)
+}
+fn same_campaign(_ a: State, _ b: State) -> bool {
+    if a.side != b.side || a.orders != b.orders || a.turn != b.turn || a.result != b.result
+        || a.passes != b.passes || a.completed_rounds != b.completed_rounds
+        || a.round_limit != b.round_limit || a.decision_pending != b.decision_pending { return false }
+    for side in 0 .. 3 { if a.gold[side] != b.gold[side] || a.food[side] != b.food[side] { return false } }
+    for i in 0 .. tile_count(a) {
+        if a.owner[i] != b.owner[i] || a.troops[i] != b.troops[i]
+            || a.fort[i] != b.fort[i] || a.settlement[i] != b.settlement[i]
+            || !same_army(army_at(a, i), army_at(b, i)) { return false }
+    }
+    true
+}
+#[test]
+fn extended_campaign_replay_and_bounds_survive_full_trace_capacity() {
+    for scenario in 0 .. 3 {
+        var s = initial(scenario)
+        var trace = [pass(); 2048]
+        var extensions: i64 = 0
+        for step in 0 .. TRACE_CAPACITY {
+            let action = if s.decision_pending { extend_campaign() } else { cycle_order(s) }
+            if action.kind == 9 { extensions += 1 }
+            assert(is_legal(s, action))
+            trace[step] = action
+            s = apply(s, action)
+            assert(s.result == 0)
+            check_bounds(s)
+            if step == 240 { assert(s.turn > 120) }
+        }
+        assert(extensions > 0 && s.completed_rounds > 180)
+        assert(s.round_limit == base_round_limit(scenario) + extensions * EXTENSION_ROUNDS)
+        var replay = initial(scenario)
+        for step in 0 .. TRACE_CAPACITY {
+            assert(is_legal(replay, trace[step]))
+            replay = apply(replay, trace[step])
+        }
+        assert(same_campaign(s, replay))
     }
 }

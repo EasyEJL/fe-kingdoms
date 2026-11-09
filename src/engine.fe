@@ -1,11 +1,13 @@
 use core::marker::Copy
 
-// Crownlines v4. The native Fe engine owns every rule and opponent decision.
+// Crownlines v5. The native Fe engine owns every rule and opponent decision.
 // Fixed capacities bound memory; scenario metadata selects active map cells.
 const MAX_TILES: usize = 64
 const MAX_ACTIONS: usize = 1024
 const MAX_TROOPS: i64 = 12
 const RESOURCE_CAP: i64 = 40
+const TRACE_CAPACITY: usize = 2048
+const EXTENSION_ROUNDS: i64 = 20
 
 struct State {
     owner: [i64; 64],
@@ -22,6 +24,9 @@ struct State {
     turn: i64,
     result: i64,
     passes: i64,
+    completed_rounds: i64,
+    round_limit: i64,
+    decision_pending: bool,
 }
 impl Copy for State {}
 // Infantry is the remainder of total troops after the two specialist counts.
@@ -45,6 +50,11 @@ fn imin(_ a: i64, _ b: i64) -> i64 { if a < b { a } else { b } }
 fn imax(_ a: i64, _ b: i64) -> i64 { if a > b { a } else { b } }
 fn abs(_ n: i64) -> i64 { if n < 0 { -n } else { n } }
 fn pass() -> Action { Action { kind: 0, from: 0, to: 0, amount: 0 } }
+fn extend_campaign() -> Action { Action { kind: 9, from: 0, to: 0, amount: 0 } }
+fn accept_draw() -> Action { Action { kind: 10, from: 0, to: 0, amount: 0 } }
+fn base_round_limit(_ scenario: usize) -> i64 {
+    if scenario == 0 { 60 } else if scenario == 1 { 120 } else { 180 }
+}
 fn map_width(_ s: State) -> usize {
     if s.scenario == 0 { 5 } else if s.scenario == 1 { 7 } else { 9 }
 }
@@ -220,6 +230,7 @@ fn initial(_ scenario: usize) -> State {
         owner: [0; 64], troops: [0; 64], cavalry: [0; 64], siege: [0; 64], fort: [0; 64], settlement: [0; 64],
         gold: [0, 8, 8], food: [0, 12, 12], scenario,
         side: 1, orders: 2, turn: 1, result: 0, passes: 0,
+        completed_rounds: 0, round_limit: base_round_limit(scenario), decision_pending: false,
     }
     let width = map_width(s)
     let last = tile_count(s) - 1
@@ -338,6 +349,11 @@ fn settlement_cost(_ level: i64) -> i64 { if level == 1 { 6 } else { 8 } }
 fn legal(_ s: State) -> Actions {
     var result = empty_actions()
     if s.result != 0 { return result }
+    if s.decision_pending {
+        with (Actions = result) { add(extend_campaign())
+            add(accept_draw()) }
+        return result
+    }
     let connected = supply(s, s.side)
     let player: usize = s.side.downcast_unchecked()
     with (Actions = result) {
@@ -412,6 +428,21 @@ fn defense(_ s: State, _ tile: usize) -> i64 {
 // Call only after validating, or with an action returned by legal().
 fn apply(_ before: State, _ action: Action) -> State {
     var s = before
+    // Campaign decisions are recorded actions, never combat orders. The next
+    // Blue turn has not begun yet, so extension pays its income exactly once.
+    if action.kind == 9 {
+        s.decision_pending = false
+        s.round_limit += EXTENSION_ROUNDS
+        s.side = 1
+        s.orders = 2
+        s.turn += 1
+        return begin_turn(s)
+    }
+    if action.kind == 10 {
+        s.decision_pending = false
+        s.result = 3
+        return s
+    }
     let player: usize = s.side.downcast_unchecked()
     if action.kind == 0 {
         s.passes += 1
@@ -464,10 +495,17 @@ fn apply(_ before: State, _ action: Action) -> State {
     if s.owner[capital(s, 2)] == 1 { s.result = 1 }
     if s.result != 0 { return s }
     if s.orders == 0 {
+        // A full round completes only after Red finishes its turn. Capital
+        // capture already returned above; four passes precede any decision.
+        if s.side == 2 { s.completed_rounds += 1 }
+        if s.passes < 4 && s.side == 2 && s.completed_rounds >= s.round_limit {
+            s.decision_pending = true
+            return s
+        }
         s.side = 3 - s.side
         s.orders = 2
         s.turn += 1
-        if s.turn > 120 || s.passes >= 4 { s.result = 3
+        if s.passes >= 4 { s.result = 3
             return s }
         return begin_turn(s)
     }
@@ -552,7 +590,7 @@ fn ranked(_ s: State, _ root: i64) -> Actions {
 }
 fn search(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i64) -> i64 uses (stats: mut Search) {
     stats.nodes += 1
-    if depth == 0 || s.result != 0 { return evaluate(s, root) }
+    if depth == 0 || s.result != 0 || s.decision_pending { return evaluate(s, root) }
     let list = ranked(s, root)
     let bound = if list.len < 6 { list.len } else { 6 }
     var alpha = low
@@ -569,6 +607,7 @@ fn search(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i64) -> i
     best
 }
 fn choose(_ s: State, _ difficulty: i64) -> Action uses (stats: mut Search) {
+    assert(s.result == 0 && !s.decision_pending)
     let list = ranked(s, s.side)
     if difficulty == 0 { stats.nodes += list.len.downcast_unchecked()
         return list.items[0] }

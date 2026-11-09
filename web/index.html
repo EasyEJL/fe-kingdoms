@@ -14,26 +14,26 @@
 <div class="toolbar">
 <label for="scenario">Map</label><select id="scenario"><option value="0">Small 5 x 3</option><option value="1">Medium 7 x 5</option><option value="2">Large 9 x 5</option></select>
 <label for="difficulty">Computer</label><select id="difficulty"><option value="0">Easy</option><option value="1">Hard</option></select>
-<button id="new">New game</button><button id="save" disabled>Save replay</button><button id="load">Load replay</button><button id="resume">Resume campaign</button><button id="campaign" hidden>View v3 campaign replay</button><button id="previous" hidden>View v2 hex replay</button><button id="legacy" hidden>View v1 square replay</button>
+<button id="new">New game</button><button id="save" disabled>Save replay</button><button id="load">Load replay</button><button id="resume">Resume campaign</button><button id="roles" hidden>View v4 mixed-army replay</button><button id="campaign" hidden>View v3 campaign replay</button><button id="previous" hidden>View v2 hex replay</button><button id="legacy" hidden>View v1 square replay</button>
 <input class="file" id="file" type="file" accept=".json,application/json">
 </div>
 <div id="notice" role="status" aria-live="polite"></div>
 <div id="human-activity" class="muted" aria-live="polite"></div><div id="activity" class="muted" aria-live="polite"></div>
 <div id="error" class="error" role="alert"></div>
 <div id="status" class="status" aria-live="polite"></div><div id="economy" class="muted" aria-live="polite"></div>
-<div class="panel" style="margin-bottom:16px"><strong id="goal">Capture Red's capital. Keep your capital safe.</strong><p id="turn-guide" aria-live="polite"></p><p id="opening-hint" class="muted"></p><small>TWO orders total across your whole kingdom, not per territory. Selecting tiles is free. You can use the same territory twice. Spend your orders, then press Run computer turn.</small></div><div class="layout">
+<div class="panel" style="margin-bottom:16px"><strong id="goal">Capture Red's capital. Keep your capital safe.</strong><p id="turn-guide" aria-live="polite"></p><p id="opening-hint" class="muted"></p><small id="order-guide">TWO orders total across your whole kingdom, not per territory. Selecting tiles is free. You can use the same territory twice. Spend your orders, then press Run computer turn.</small></div><div class="layout">
 <section><div class="map-shell"><div class="map-tools"><strong>Kingdom map</strong><button id="zoom-out" aria-label="Zoom map out">-</button><output id="zoom-label" aria-live="polite">100%</output><button id="zoom-in" aria-label="Zoom map in">+</button><button id="zoom-fit">Fit map</button><button id="zoom-reset">100%</button></div><div id="map-scroll" class="map-scroll" tabindex="0" aria-label="Scrollable kingdom map" aria-describedby="map-help"><div id="map-stage" class="map-stage"><div id="board" class="board" aria-label="Kingdom map"></div></div></div></div><p id="map-help" class="muted map-help">Zoom for detail, scroll to explore. Tab to a hex and press Enter to inspect it. Arrow keys scroll the focused map.</p><div class="legend"><span class="blue-text">BLUE / you</span> | <span class="red-text">RED / computer</span> | N / neutral<br>Number badges count each troop role. CUT OFF means disconnected from the capital. Mountains block movement and supply; passes cross the ridge. Gold edges mark the last order, dark edges the selection.<div id="role-legend" class="role-legend"></div></div><div id="search" class="muted"></div></section>
 <aside class="panel"><h2 id="action-title">Your territories</h2><p id="selection-help" class="muted">Open one territory below or select it on the map.</p><p id="territory-detail" class="muted"></p><div id="global-actions" class="global-orders"></div><div id="actions"></div></aside>
 </div>
-<details><summary>Current v4 rules and strategy basics</summary><ul>
+<details><summary>Current v5 rules and strategy basics</summary><ul>
 <li>You command Blue. Each side takes two orders per turn. Select a territory, then choose an order supplied by Fe. These are two orders TOTAL across your kingdom, not per territory. Selecting tiles is free. End my turn forfeits your remaining orders. After your second order or End my turn, press Run computer turn to let Red act.</li>
 <li>Move either half your troops (rounded down) or all but one to an edge-adjacent hex (up to six neighbors). Friendly territories combine troops and preserve their composition, up to 12 total. Fe reserves one garrison (infantry first, otherwise cavalry, otherwise siege) and chooses the moving composition proportionally from the rest; inspect the forecast before committing. Every territory retains at least one troop.</li>
 <li>Recruit 2 infantry for 3 gold and 2 food at a supplied capital, village or town. Supplied towns can recruit cavalry (1 for 4 gold and 2 food) or siege (1 for 5 gold and 3 food). A supplied town with at least one infantry can also Train it into cavalry or siege for the same cost and one order. Training converts the infantry and leaves the total troop count unchanged, including in a full stack. Fortify for 2 gold (maximum fort level 2). Build a village for 6 gold, then upgrade it to a town for 8 gold; each costs one order. Only orders allowed by Fe are shown.</li>
 <li>All units have base attack and defense strength 1. Each cavalry adds 1 attack on plains or farms, and each siege adds 2 attack against a fort, settlement or capital. Fe calculates attack power, defense, survivors and both resulting compositions in the forecast. An attack must exceed defense to capture. On capture, attacker losses are ceiling(defense * committed troop count / attack power), capped so at least one attacker survives. On a repelled attack, all attackers die; defenders lose max(1, attack power minus fort and terrain bonus), with at least one defender surviving. Losses remove infantry first, then cavalry, then siege, including attrition. Captured forts are removed. Use the displayed result rather than assuming troop count equals attack power.</li>
 <li>Supply follows owned passable hexes to your capital. Mountains block it. At the start of your turn, gain 2 gold plus the level of each supplied settlement, and 3 food plus 2 for each supplied farm. Gold and food are capped at 40. Food production is added and capped BEFORE upkeep is paid, so some production can be wasted at full storage. The projected food amount above comes directly from Fe. Villages are level 1 and towns level 2.</li><li>Supplied armies consume food for mobile troops: one food per started group of three troops above the lone garrison. Fe shows production, upkeep, net food and projected shortage losses above the map. A food shortage removes mobile troops from the largest armies. Cut-off territories instead lose one troop, to a minimum of one; they do not consume your central food.</li>
-<li>Capture the enemy capital to win immediately. Four consecutive end-turn orders, or completing 120 side turns, ends the match in a draw. Small, medium and large maps use the same two-order budget and visible rules. Any non-pass order resets the consecutive-pass count.</li>
+<li>Capture the enemy capital to win immediately. Four consecutive end-turn orders end the match in a draw. Small, medium and large maps initially allow 60, 120 and 180 complete rounds respectively. At the round limit, choose to extend by 20 rounds or accept a draw. The choice is recorded in the replay. A full replay pauses play for export; it does not declare a draw. All maps use the same two-order budget. Any non-pass order resets the consecutive-pass count.</li>
 <li>Easy uses greedy one-ply evaluation. Hard uses four-ply beam alpha-beta search. Both use identical rules and resources, with no hidden bonuses. Select difficulty before a new game.</li>
-<li>New games use troop-role campaign rules version 4. Version 1 square, version 2 hex and version 3 campaign replays can be viewed read-only and are never silently converted. Save replay downloads the full deterministic move record. Load replay validates it with Fe. A local checkpoint is saved only after a successful response. Export a replay before replacing a game if you want to keep it.</li>
+<li>New games use troop-role campaign rules version 5. Version 1 square, version 2 hex, version 3 campaign and version 4 mixed-army replays can be viewed read-only and are never silently converted. Save replay downloads the full deterministic move record. Load replay validates it with Fe. A local checkpoint is saved only after a successful response. Export a replay before replacing a game if you want to keep it.</li>
 </ul></details>
 <details><summary>Recent orders</summary><div id="log"></div></details>
 <script>
@@ -43,12 +43,14 @@ const terrain=['Plain','Farm','Town','Hill','Capital','Mountain','Terrain 6','Pa
 const settlementNames=['None','Village','Town'];
 const names=['Neutral','Blue','Red'];
 let game=null, selected=null, busy=false, mapZoom=1;
-const CURRENT_VERSION=4, CHECKPOINT='fe-kingdoms-v4', CAMPAIGN_CHECKPOINT='fe-kingdoms-v3', PREVIOUS_CHECKPOINT='fe-kingdoms-v2', LEGACY_CHECKPOINT='fe-kingdoms-v1';
+const CURRENT_VERSION=5, CHECKPOINT='fe-kingdoms-v5', ROLES_CHECKPOINT='fe-kingdoms-v4', CAMPAIGN_CHECKPOINT='fe-kingdoms-v3', PREVIOUS_CHECKPOINT='fe-kingdoms-v2', LEGACY_CHECKPOINT='fe-kingdoms-v1';
 function mapInfo(){return game&&game.map||{width:5,height:3,count:15,topology:game&&game.version===1?0:1,scenario:0,blueCapital:0,redCapital:14,orderBudget:2,maxTurns:120};}
 const place=i=>String.fromCharCode(65+i%mapInfo().width)+(Math.floor(i/mapInfo().width)+1);
 const rulesLabel=v=>v===1?'square':v===2?'hex':'campaign';
 const composition=(infantry,cavalry,siege)=>'Infantry '+infantry+', cavalry '+cavalry+', siege '+siege;
 const tileComposition=t=>t.infantry===undefined?'':composition(t.infantry,t.cavalry,t.siege);
+const isDecision=a=>a[0]===9||a[0]===10;
+const paused=()=>!!game&&(!!game.state.decisionPending||!!game.state.traceCapacityReached);
 const readOnly=()=>!!game&&game.version!==CURRENT_VERSION;
 // Small local vector illustrations, never remote assets or engine-derived rules.
 const art={
@@ -84,12 +86,14 @@ $('zoom-in').onclick=()=>zoomMap(mapZoom+.15);$('zoom-out').onclick=()=>zoomMap(
 $('zoom-fit').onclick=()=>{zoomMap((($('map-scroll').clientWidth||600)-36)/parseFloat($('board').style.width||600));$('map-scroll').scrollLeft=0;$('map-scroll').scrollTop=0;};
 for(const kind of ['infantry','cavalry','siege']){const label=document.createElement('span');label.append(icon(kind));const text=document.createElement('span');text.textContent=kind[0].toUpperCase()+kind.slice(1);label.append(text);$('role-legend').append(label);}
 function payload(mode,actions){return {version:game.version,scenario:game.map?.scenario??0,mode,difficulty:game.difficulty,actions};}
-const actionName=a=>a[0]===0?'End turn':a[0]===1?'Move '+a[3]+' troops: '+place(a[1])+' -> '+place(a[2]):a[0]===2?'Recruit +2 '+(game&&game.version>=4?'infantry':'troops')+' at '+place(a[1]):a[0]===3?'Fortify '+place(a[1]):a[0]===4?(a[3]===1?'Build village at ':'Upgrade to town at ')+place(a[1]):a[0]===5?'Recruit +1 cavalry at '+place(a[1]):a[0]===6?'Recruit +1 siege at '+place(a[1]):a[0]===7?'Train 1 infantry -> cavalry at '+place(a[1]):a[0]===8?'Train 1 infantry -> siege at '+place(a[1]):'Unknown order';
+const actionName=a=>a[0]===0?'End turn':a[0]===1?'Move '+a[3]+' troops: '+place(a[1])+' -> '+place(a[2]):a[0]===2?'Recruit +2 '+(game&&game.version>=4?'infantry':'troops')+' at '+place(a[1]):a[0]===3?'Fortify '+place(a[1]):a[0]===4?(a[3]===1?'Build village at ':'Upgrade to town at ')+place(a[1]):a[0]===5?'Recruit +1 cavalry at '+place(a[1]):a[0]===6?'Recruit +1 siege at '+place(a[1]):a[0]===7?'Train 1 infantry -> cavalry at '+place(a[1]):a[0]===8?'Train 1 infantry -> siege at '+place(a[1]):a[0]===9?'Extend by '+mapInfo().extensionRounds+' rounds':a[0]===10?'Accept draw':'Unknown order';
 function forecastText(a,p,done=false){
  if(!p)return 'Fe will validate this order.';
  if(p.result===3)return done?'Match ended in a draw. No further turns.':'Ends the match in a draw. No further turns.';
  if(p.result===1)return done?'You captured Red capital '+place(mapInfo().redCapital)+' and won the match.':'Captures Red capital '+place(mapInfo().redCapital)+' and wins the match immediately.';
  if(p.result===2)return done?'Red won the match.':'Ends the match with a Red victory.';
+ if(a[0]===9)return (done?'Extended':'Extends')+' the round limit by '+mapInfo().extensionRounds+' rounds. Blue resumes with its normal turn; Red does not move automatically.';
+ if(a[0]===10)return 'Ends the match in a draw. No further turns.';
  if(p.outcome===0)return 'Unused orders are forfeited. Red plays next.';
  if(p.outcome===1)return (done?'Moved':'Would move')+' to '+place(a[2])+': '+p.targetTroops+' troops there, '+p.sourceTroops+' left at '+place(a[1])+'.';
  if(p.outcome===2)return (done?'Captured':'Would capture')+' '+place(a[2])+' with '+p.targetTroops+' survivors. Defense '+p.defense+'; '+p.sourceTroops+' left behind.';
@@ -115,8 +119,8 @@ function replay(){return {version:game.version,scenario:game.map?.scenario??0,di
 function setBusy(value){busy=value;document.querySelectorAll('button,select').forEach(el=>el.disabled=value);$('save').disabled=value||!game;}
 function actionButton(a,index){
  const p=game.previews&&game.previews[index],b=document.createElement('button');b.className=p&&p.outcome===3?'risky':'';
- const title=document.createElement('span');title.textContent=a[0]===0?'End my turn (skip '+game.state.orders+' remaining '+(game.state.orders===1?'order':'orders')+')':actionName(a)+' | 1 order';b.append(title);
- const detail=document.createElement('small');detail.className='forecast';detail.textContent=forecast(a,p)+(p&&p.food1After!==undefined?' Your food after this order: '+p.food1After+'.':'');b.append(detail);
+ const title=document.createElement('span');title.textContent=a[0]===0?'End my turn (skip '+game.state.orders+' remaining '+(game.state.orders===1?'order':'orders')+')':actionName(a)+(isDecision(a)?' | campaign decision':' | 1 order');b.append(title);
+ const detail=document.createElement('small');detail.className='forecast';detail.textContent=forecast(a,p)+(p&&p.food1After!==undefined?' Your food after this '+(isDecision(a)?'decision':'order')+': '+p.food1After+'.':'');b.append(detail);
  const roleHelp={2:'Infantry: two bodies for the cost; base attack/defense 1. Lost first in battle.',5:'Cavalry: +1 attack on plain/farm. Only one recruit; no extra speed or defense.',6:'Siege: +2 attack against fort, settlement OR capital. Only one recruit; no extra defense or movement penalty.',7:'Cavalry: +1 attack on plain/farm; no extra speed or defense. Paid conversion, not an extra troop.',8:'Siege: +2 attack against fort, settlement OR capital; no extra defense or movement penalty. Paid conversion, not an extra troop.'};
  if(game.version>=4&&roleHelp[a[0]]){const help=document.createElement('small');help.className='forecast role-benefit';help.textContent=roleHelp[a[0]];b.append(help);}
  b.onclick=()=>perform(a,p);return b;
@@ -129,10 +133,12 @@ function render(){
  $('scenario').value=String(m.scenario??0);
  $('goal').textContent='Capture Red capital '+place(m.redCapital)+'. Keep your capital '+place(m.blueCapital)+' safe.';
  const ending=['','You win: Red capital '+place(m.redCapital)+' has fallen.','Red wins: your capital '+place(m.blueCapital)+' has fallen.','Draw: neither kingdom won.'];
- const turn=s.side===1?'Your turn: '+s.orders+' of '+budget+' orders remaining':'Red turn: waiting for Run computer turn';
- $('status').textContent=(legacy?'Legacy v'+game.version+' '+rulesLabel(game.version)+' replay (read-only) | ':'')+(s.result?ending[s.result]:turn)+' | Round '+Math.ceil(s.turn/2)+' | Gold: you '+s.gold1+', Red '+s.gold2;
- $('turn-guide').textContent=legacy?'This version '+game.version+' replay uses its original '+rulesLabel(game.version)+' rules. You can inspect or export it. Start a new campaign to play.':s.result?'Match complete. Save the replay or start again.':s.side===2?'Your turn is finished. Review the board, then press Run computer turn. Red gets up to '+budget+' orders.':s.orders===1?'1 order remains across your WHOLE kingdom. Red has not moved. Use another order, or end your turn early.':'You have '+budget+' orders TOTAL across your whole kingdom. You can use the same territory twice. Selecting a hex costs no order.';
- $('opening-hint').textContent=!legacy&&game.actions.length===0&&m.scenario===0?'Open village A2 below (free), recruit +2 troops for 3 gold and 2 food (order 1), then send 2 troops from A2 to B2 (order 2). Those are your TWO orders.':'';
+ const capacity=!legacy&&!!s.traceCapacityReached,pending=!legacy&&!!s.decisionPending;
+ const turn=capacity?'Replay capacity reached: play paused':pending?'Round limit reached: choose how to continue':s.side===1?'Your turn: '+s.orders+' of '+budget+' orders remaining':'Red turn: waiting for Run computer turn';
+ $('status').textContent=(legacy?'Legacy v'+game.version+' '+rulesLabel(game.version)+' replay (read-only) | ':'')+(s.result?ending[s.result]:turn)+(game.version>=5?' | Completed rounds: '+s.completedRounds+' / '+s.roundLimit+(s.result||capacity?'':' | '+Math.max(0,s.roundLimit-s.completedRounds)+' rounds until next decision'):' | Round '+Math.ceil(s.turn/2))+' | Gold: you '+s.gold1+', Red '+s.gold2;
+ $('turn-guide').textContent=legacy?'This version '+game.version+' replay uses its original '+rulesLabel(game.version)+' rules. You can inspect or export it. Start a new campaign to play.':s.result?'Match complete. Save the replay or start again.':capacity?'Technical replay capacity reached. The match has not ended. Save replay to export this position. No further orders can be recorded.':pending?'Round limit reached. Extend the campaign or accept a draw below. No next-turn income or orders occur until you choose.':s.side===2?'Your turn is finished. Review the board, then press Run computer turn. Red gets up to '+budget+' orders.':s.orders===1?'1 order remains across your WHOLE kingdom. Red has not moved. Use another order, or end your turn early.':'You have '+budget+' orders TOTAL across your whole kingdom. You can use the same territory twice. Selecting a hex costs no order.';
+ $('order-guide').hidden=legacy||!!s.result||paused();
+ $('opening-hint').textContent=!legacy&&!s.result&&!paused()&&game.actions.length===0&&m.scenario===0?'Open village A2 below (free), recruit +2 troops for 3 gold and 2 food (order 1), then send 2 troops from A2 to B2 (order 2). Those are your TWO orders.':'';
  $('economy').replaceChildren();
  for(const e of game.economy||[]){
   const row=document.createElement('p');row.className='economy-row'+(e.shortageLossesNextTurn>0?' shortage':'');
@@ -153,7 +159,7 @@ function render(){
  const last=game.actions[game.actions.length-1];
  for(const t of game.tiles){
   const q=t.q??t.index%m.width,r=t.r??Math.floor(t.index/m.width),blocked=t.passable===0||t.passable===false;
-  const b=document.createElement('button');b.className='tile '+(blocked?'blocked ':'')+(!hex?'legacy ':'')+(t.owner===1?'blue':t.owner===2?'red':'')+(t.index===selected?' selected':'')+(!t.supplied&&t.owner?' unsupplied':'')+(last&&last[0]!==0&&(last[1]===t.index||last[2]===t.index)?' recent':'');
+  const b=document.createElement('button');b.className='tile '+(blocked?'blocked ':'')+(!hex?'legacy ':'')+(t.owner===1?'blue':t.owner===2?'red':'')+(t.index===selected?' selected':'')+(!t.supplied&&t.owner?' unsupplied':'')+(last&&last[0]!==0&&!isDecision(last)&&(last[1]===t.index||last[2]===t.index)?' recent':'');
   b.style.left=((q+(hex?r/2:0))*stepX)+'px';b.style.top=(r*stepY)+'px';
   b.id='hex-'+t.index;b.setAttribute('aria-pressed',String(t.index===selected));b.setAttribute('aria-label',place(t.index)+', '+terrain[t.terrain]+', '+names[t.owner]+', '+t.troops+' troops'+(tileComposition(t)?', '+tileComposition(t):'')+', fort '+t.fort+(t.settlement?', '+settlementNames[t.settlement]:'')+', '+(blocked?'impassable':t.supplied?'supplied':'not supplied'));
   const inside=document.createElement('span');inside.className='hex-content';
@@ -171,6 +177,8 @@ function render(){
  $('territory-detail').textContent=!tile?'':(tile.passable===0||tile.passable===false)?'Mountain: impassable to armies and supply. Find a pass through the ridge.':place(tile.index)+' | '+terrain[tile.terrain]+(tile.settlement!==undefined?' | Settlement: '+(settlementNames[tile.settlement]??tile.settlement):'')+(tile.upkeep!==undefined?' | Food upkeep: '+tile.upkeep+' per turn':'')+(tileComposition(tile)?' | '+tileComposition(tile):'')+(tile.terrain===4?' | Capital: can recruit when supplied.':tile.settlement>0?' | Settlement: can recruit when supplied.':tile.owner===1?' | Recruiting requires a capital or settlement. Build a village here if that order is available.':'')+'.';
  $('actions').replaceChildren();$('global-actions').replaceChildren();
  if(legacy||s.result){const p=document.createElement('p');p.className=legacy?'legacy-note':'';p.textContent=legacy?'Read-only legacy replay. Start New game for the current campaign rules.':'Match complete. Start again or save this replay.';$('global-actions').append(p);}
+ else if(capacity){const p=document.createElement('p');p.textContent='Replay capacity reached ('+m.traceCapacity+' recorded actions). Save replay to preserve this position. This is a technical pause, not a game result.';$('global-actions').append(p);}
+ else if(pending){game.legal.forEach((a,index)=>{if(isDecision(a))$('global-actions').append(actionButton(a,index));});}
  else if(s.side!==1){const b=document.createElement('button');b.className='computer-turn';b.textContent='Run computer turn';b.onclick=()=>request(payload(0,game.actions));$('global-actions').append(b);}
  else {const passIndex=game.legal.findIndex(a=>a[0]===0);if(passIndex>=0)$('global-actions').append(actionButton(game.legal[passIndex],passIndex));}
  for(const owned of game.tiles.filter(t=>t.owner===1)){
@@ -179,8 +187,8 @@ function render(){
   if(open){const body=document.createElement('div');body.className='territory-orders';let count=0;
    if(tileComposition(owned)){const units=document.createElement('p');units.className='muted unit-composition';units.textContent=tileComposition(owned);body.append(units);}
    if(!legacy&&owned.infantry!==undefined){const note=document.createElement('p');note.className='role-note';note.textContent='Every role: defense 1, one-hex movement, one stack slot, same upkeep per head. Specialist recruits and paid training require a supplied town.';body.append(note);}
-   if(!legacy&&!s.result&&s.side===1)game.legal.forEach((a,index)=>{if(a[0]!==0&&a[1]===owned.index){body.append(actionButton(a,index));count++;}});
-   if(!count){const p=document.createElement('p');p.className='muted';p.textContent=legacy?'Legacy replay: orders are disabled.':s.result?'Match complete.':s.side!==1?'Waiting for the computer turn.':'No legal orders here right now. Try another territory.';body.append(p);}
+   if(!legacy&&!s.result&&!paused()&&s.side===1)game.legal.forEach((a,index)=>{if(a[0]!==0&&!isDecision(a)&&a[1]===owned.index){body.append(actionButton(a,index));count++;}});
+   if(!count){const p=document.createElement('p');p.className='muted';p.textContent=legacy?'Legacy replay: orders are disabled.':s.result?'Match complete.':capacity?'Replay capacity reached. Export this replay.':pending?'Choose whether to extend or draw above.':s.side!==1?'Waiting for the computer turn.':'No legal orders here right now. Try another territory.';body.append(p);}
    if(!legacy&&owned.infantry!==undefined){const comparison=document.createElement('details');comparison.className='role-comparison';const summary=document.createElement('summary');summary.textContent='Compare troop roles and costs';comparison.append(summary);comparison.append(roleGuide(owned));body.append(comparison);}card.append(body);
   }
   $('actions').append(card);
@@ -190,7 +198,10 @@ function render(){
  setBusy(busy);
 }
 function perform(a,p){
- if(busy||!game||readOnly()||game.state.side!==1||game.state.result)return Promise.resolve(false);
+ if(busy||!game||readOnly()||game.state.result||game.state.traceCapacityReached)return Promise.resolve(false);
+ if(!game.legal.some(legal=>legal.length===a.length&&legal.every((value,index)=>value===a[index])))return Promise.resolve(false);
+ if(game.state.decisionPending?!isDecision(a):(isDecision(a)||game.state.side!==1))return Promise.resolve(false);
+ if(a[0]===10&&!confirm('Accept a draw and end this match? This decision will be recorded in the replay.'))return Promise.resolve(false);
  if(a[0]===0&&!confirm('End your turn now and give up '+game.state.orders+' remaining '+(game.state.orders===1?'order':'orders')+'?'))return Promise.resolve(false);
  if(p&&p.outcome===3&&!confirm(forecast(a,p)+' Send this attack anyway?'))return Promise.resolve(false);
  return request(payload(1,[...game.actions,a]),false,{kind:'human',action:a,preview:p});
@@ -204,11 +215,12 @@ async function request(payload, resetSelection=false, feedback={}){
   if(resetSelection)selected=null;
   render();checkpoint();$('notice').textContent='';
   if(feedback.kind==='human'){
+   if(isDecision(feedback.action))$('activity').textContent='';
    $('human-activity').textContent='Your last order: '+actionName(feedback.action)+'. '+forecast(feedback.action,feedback.preview,true);
-   if(game.state.side===2&&!game.state.result&&feedback.action[0]!==0)$('turn-guide').textContent='You used both orders. Review the board, then press Run computer turn. Red has not moved yet.';
+   if(game.state.side===2&&!game.state.result&&!paused()&&!isDecision(feedback.action)&&feedback.action[0]!==0)$('turn-guide').textContent='You used both orders. Review the board, then press Run computer turn. Red has not moved yet.';
   }
   const computerActions=payload.mode===0?data.actions.slice(payload.actions.length):[];
-  if(computerActions.length)$('activity').textContent='Computer: '+computerActions.map((a,i)=>(i+1)+'. '+actionName(a)).join('; ')+(game.state.result?'. Match ended.':'. Your turn is ready.');
+  if(computerActions.length)$('activity').textContent='Computer: '+computerActions.map((a,i)=>(i+1)+'. '+actionName(a)).join('; ')+(game.state.result?'. Match ended.':game.state.traceCapacityReached?'. Replay capacity reached; save replay to export.':game.state.decisionPending?'. Round limit reached; choose whether to extend or draw.':game.state.side===2?'. Red turn is still pending.':'. Your turn is ready.');
   else if(resetSelection){$('human-activity').textContent='';$('activity').textContent=feedback.kind==='new'?'New hex game. Open one of your territories to see its orders.':'Replay restored and validated by Fe.';}
   return true;
  }
@@ -216,7 +228,7 @@ async function request(payload, resetSelection=false, feedback={}){
  finally{setBusy(false);}
 }
 function load(text){
- try{const data=JSON.parse(text);if(!data||![1,2,3,4].includes(data.version))throw Error('Unsupported replay version.');return request({version:data.version,scenario:data.scenario??0,mode:1,difficulty:data.difficulty,actions:data.actions},true);}
+ try{const data=JSON.parse(text);if(!data||![1,2,3,4,5].includes(data.version))throw Error('Unsupported replay version.');return request({version:data.version,scenario:data.scenario??0,mode:1,difficulty:data.difficulty,actions:data.actions},true);}
  catch(e){$('error').textContent='Cannot load replay: '+e.message;return Promise.resolve(false);}
 }
 function activeCheckpoint(){
@@ -232,17 +244,19 @@ $('save').onclick=()=>{if(!game)return;const url=URL.createObjectURL(new Blob([J
 $('load').onclick=()=>$('file').click();
 $('file').onchange=async()=>{
  const file=$('file').files[0];$('file').value='';if(!file||busy)return;
- if(file.size>32768){$('error').textContent='Replay file is too large.';return;}
+ if(file.size>262144){$('error').textContent='Replay file is too large.';return;}
  setBusy(true);
  try{const text=await file.text();setBusy(false);await load(text);}
  catch(e){$('error').textContent='Cannot read replay: '+e.message;}
  finally{setBusy(false);}
 };
 $('resume').onclick=()=>{try{const text=localStorage.getItem(CHECKPOINT);if(!text)throw Error('No saved game in this browser.');return load(text);}catch(e){$('error').textContent=e.message;}};
+$('roles').onclick=()=>{try{const text=localStorage.getItem(ROLES_CHECKPOINT);if(!text)throw Error('No previous mixed-army replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
 $('campaign').onclick=()=>{try{const text=localStorage.getItem(CAMPAIGN_CHECKPOINT);if(!text)throw Error('No previous campaign replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
 $('previous').onclick=()=>{try{const text=localStorage.getItem(PREVIOUS_CHECKPOINT);if(!text)throw Error('No previous hex replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
 $('legacy').onclick=()=>{try{const text=localStorage.getItem(LEGACY_CHECKPOINT);if(!text)throw Error('No old square replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
-let saved=false,oldSaved=false,previousSaved=false,campaignSaved=false;try{saved=!!localStorage.getItem(CHECKPOINT);oldSaved=!!localStorage.getItem(LEGACY_CHECKPOINT);previousSaved=!!localStorage.getItem(PREVIOUS_CHECKPOINT);campaignSaved=!!localStorage.getItem(CAMPAIGN_CHECKPOINT);}catch{}
+let saved=false,oldSaved=false,previousSaved=false,campaignSaved=false,rolesSaved=false;try{saved=!!localStorage.getItem(CHECKPOINT);rolesSaved=!!localStorage.getItem(ROLES_CHECKPOINT);oldSaved=!!localStorage.getItem(LEGACY_CHECKPOINT);previousSaved=!!localStorage.getItem(PREVIOUS_CHECKPOINT);campaignSaved=!!localStorage.getItem(CAMPAIGN_CHECKPOINT);}catch{}
+$('roles').hidden=!rolesSaved;
 $('campaign').hidden=!campaignSaved;
 $('previous').hidden=!previousSaved;
 $('legacy').hidden=!oldSaved;
