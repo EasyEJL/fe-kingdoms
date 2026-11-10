@@ -1,10 +1,10 @@
 # Fe Kingdoms
 
-A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current source milestone is **unreleased rules version 7: frontier development**. The browser and Python adapter only display and transport Fe results.
+A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current local preview is **rules version 7: frontier development**. The browser and Python adapter only display and transport Fe results.
 
 ## Isolated frontier development
 
-This branch is work in progress; do not retain intermediate v7 saves as a stable release format. The frontier-expansion branch is developed in `C:\Users\Eric\dev\fe-kingdoms-frontiers` with its separate preview reserved at http://localhost:8768. It does not replace the active game on ports 8765, 8766 and 8767. Run `scripts/preview.ps1` from this checkout to start or locate that separate preview. Do not use the ordinary launcher to switch the live game during a match.
+The four v7 feature stages are implemented and the automated suite passes. This is a local preview, not a published release; fresh browser and human validation remain outstanding. The frontier-expansion branch is developed in `C:\Users\Eric\dev\fe-kingdoms-frontiers` with its separate preview reserved at http://localhost:8768. It does not replace the active game on ports 8765, 8766 and 8767. Run `scripts/preview.ps1` from this checkout to start or locate that separate preview. Do not use the ordinary launcher to switch the live game during a match.
 
 Browser saves are separate for each port. To copy a current game into the preview, use **Save replay** in the original game and **Load replay** in the preview. The original checkpoint remains untouched. New games use v7. Existing v1-v6 matches remain exact read-only replays; they are never silently converted.
 
@@ -57,7 +57,7 @@ The campaign milestone has directed Fe tests for maps, routes, economy, supply, 
 
 The v3 campaign exposed defensive stalls: fortified passes could exceed the largest infantry attack. V4 provides explicit siege recruitment/training and mixed-army attacks. Both policies pass tactical tests for training and breaching a full fortified frontier. This does not guarantee every bot match becomes decisive. Human-versus-computer is the intended use. V5 replaces automatic time draws with explicit continuation; four-pass draws remain. A fresh human playtest is needed to assess enjoyment and difficulty.
 
-Eric playtested the original square game and the large-map visual v4 preview. He found the latter fun and challenging, but the sixty-round cap interrupted active fighting. V6 rivers, supply previews and continuation need a fresh human playtest. Mocked UI tests and HTTP tests do not establish visual browser correctness or enjoyment. The earlier visual preview has partial automated browser coverage (small-map rendering, selection and first recruitment) and Eric's later large-map human playtest. New v6 visual details have mocked-UI coverage, not a new browser inspection. See docs/validation.md for the exact boundary.
+Eric playtested the original square game and the large-map visual v4 preview. He found the latter fun and challenging, but the sixty-round cap interrupted active fighting. V6 rivers, supply previews and continuation need a fresh human playtest. Mocked UI tests and HTTP tests do not establish visual browser correctness or enjoyment. The earlier visual preview has partial automated browser coverage (small-map rendering, selection and first recruitment) and Eric's later large-map human playtest. New v6/v7 visual details have mocked-UI coverage, not a new browser inspection. V7 additionally has two bounded model-versus-Fe campaigns with 96 verified Blue forecasts and exact final replays; both campaigns remained ongoing when testing stopped. The separate v7 browser inspection was blocked before a board could be inspected. See docs/validation.md for the exact boundary.
 
 ## Learn the implementation
 

@@ -121,4 +121,12 @@ New native coverage verifies observable focus priority, actual score effects, fr
 
 Capture-then-fortify tests cover supplied ownership, gold, the remaining one-order budget and search value bounds. Siege movement and cavalry entering forest correctly prevent that same-turn follow-up. These tests do not assert that the AI always chooses fortification. A separate defense fixture found Easy could safely pass because the cut-off enemy lost a troop before attacking; its test was corrected to verify actual protection, not demand a particular first action.
 
-Native paired decision/replay smoke checks took approximately0.045–0.148 seconds across the six map/difficulty combinations. This is a small sample, not a worst-case performance guarantee. No runtime LLM or host evaluation is involved. No new browser or human playtest has yet been performed for v7; those remain distinct from the passing automated suite. Existing previews remain untouched.
+Native paired decision/replay smoke checks took approximately 0.045–0.148 seconds across the six map/difficulty combinations. This is a small sample, not a worst-case performance guarantee. No runtime LLM or host evaluation is involved. No new browser or human playtest has yet been performed for v7; those remain distinct from the passing automated suite. Existing previews remain untouched.
+
+V7 browser inspection attempt: a separate fresh Chrome QA window was opened, but navigation was stopped because the automation could not confidently verify the current browser URL. UI control stopped immediately. No v7 board was visually verified; the existing game tabs were not replaced. This remains a browser-validation gap despite successful mocked UI and real HTTP checks.
+
+## Completed v7 model checks
+
+The [Sol playtest report](playtests/2026-11-10-v7.md) records two model-selected Blue campaigns against actual Fe Red. Small/Easy stopped ongoing at 120 actions and 32 completed rounds; Medium/Hard stopped ongoing at 79 actions and 20 rounds. These were deliberate budgets, not draws. All 96 selected Blue actions passed a 22-field resulting-state forecast audit, and both final replays reproduced exactly. These samples exercised shared bridge exploitation, captured specialties, mixed-detachment order costs and capture-then-fortify. They do not establish balance or visual clarity.
+
+The [development-map study](experiments/development-map.md) compares eight bounded native-policy openings on Medium/Large. Existing Large already delays ordinary contact; forcing early town investment changes subsequent decisions and sometimes accelerates contact. A larger map and extra food are not yet justified as pacing fixes. One game ended in capital victory, seven were still ongoing at their budgets.

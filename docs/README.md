@@ -40,3 +40,6 @@ Add an ADR for a meaningful architectural or rules decision, not every implement
 - [ADR 0012: Permanent town specialties](adr/0012-town-specialties.md).
 - [ADR 0013: Bounded permanent shared crossings](adr/0013-shared-crossings.md).
 - [ADR 0014: Bounded opponent priorities and truthful feedback](adr/0014-opponent-focus-feedback.md).
+
+- [V7 Sol playtest and replays](playtests/2026-11-10-v7.md): two bounded model-versus-Fe campaigns, forecast audits and limitations.
+- [Development-map study](experiments/development-map.md): measured existing-map development openings and a proposed, unimplemented larger-map experiment.
