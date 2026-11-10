@@ -19,14 +19,14 @@ No remote is configured. Local branches, diffs, reviews, commits and merges work
 
 ## Launch and verify
 
-From the project directory, with Docker Desktop running:
+From C:\Users\Eric\dev\fe-kingdoms-charters, with Docker Desktop running:
 
 ```powershell
 .\launch.ps1
 .\scripts\verify.ps1
 ```
 
-Open http://localhost:8765. The launcher recognizes an existing `fe-kingdoms` container. To rebuild a running instance, stop that container first with `docker stop fe-kingdoms`, then launch again. Browser checkpoints and downloaded replays are independent of the stateless server.
+This checkout's `launch.ps1` delegates to its isolated preview launcher on http://localhost:8770, using the `fe-kingdoms-charters` container. Older previews on ports 8765 through 8769 are left unchanged. Do not stop or replace an existing preview during a player match; announce readiness and preserve/export the game before a deliberate switch. Browser checkpoints and downloaded replays are independent of the stateless server.
 
 Verification needs local Node and the existing pinned Fe Docker image. It runs UI unit tests, native Fe tests, bounded self-play samples, replay/parser tests and a complete real-HTTP match. A self-play budget stop is unfinished, not a draw. Check `evidence/verification.json` for `status: passed`; failed or running evidence is not success. Review the generated logs when a test fails.
 

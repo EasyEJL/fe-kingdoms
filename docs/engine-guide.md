@@ -1,6 +1,6 @@
 # A guided tour of the Fe engine
 
-This guide describes the **unreleased version 7 frontier engine**. Start with the ideas below, then follow the named functions. You do not need to understand every Fe language feature before understanding the game. Read the decision records alongside this guide for why the rules evolved; this is a tour of the current implementation, not a claim that balance work is finished.
+This guide describes the **version 8 kingdom-development engine**. Start with the ideas below, then follow the named functions. You do not need to understand every Fe language feature before understanding the game. Read the decision records alongside this guide for why the rules evolved; this is a tour of the current implementation, not a claim that balance work is finished.
 
 ## 1. The useful mental model
 
@@ -20,7 +20,7 @@ The Fe code compiles to a **native executable**. This game is not an EVM contrac
 2. A human order sends the accepted action sequence plus the new action to `/api/game`. Mode 1 means Red does not move automatically.
 3. In `server.py`, `request_text` validates the request shape and serializes integers. `game` starts the native executable. Python does not decide legality or battle outcomes.
 4. In `src/native.fe`, `run` creates `initial(scenario)`, checks each action with `is_legal`, and reconstructs the position with `apply`.
-5. After both human orders, the position belongs to Red. **Run computer turn** sends mode 0. Fe calls `choose`, validates its action and applies it until Red finishes or the match ends.
+5. After both orders are spent (possibly by one two-order move), the position belongs to Red. **Run computer turn** sends mode 0. Fe calls `decide`, validates its action and applies it until Red finishes or the match ends. The `choose` wrapper remains available to callers that need only the action.
 6. Fe emits state, accepted actions, legal actions and forecasts. Python's `decode` turns the numeric records into JSON; the browser renders them.
 
 Each request reconstructs state from orders. The HTTP process does not hold a hidden authoritative game session. Saves contain actions, not a state snapshot that the engine blindly trusts.
@@ -29,9 +29,9 @@ Each request reconstructs state from orders. The HTTP process does not hold a hi
 
 Start with `State`, `Action` and `Actions` in `src/engine.fe`.
 
-- `State` holds tile ownership, total troops, cavalry, siege, forts and settlements; both kingdoms' gold/food; and scenario/turn information.
+- `State` holds tile ownership, total troops, cavalry, siege, forts, settlements and specialties; both kingdoms' gold/food and development knowledge; bridge construction and scenario/turn information.
 - Arrays have fixed capacities: 64 tile slots and 1,024 legal actions. `tile_count` selects the active cells; the largest current map uses 45.
-- `Action` has `kind`, `from`, `to`, `amount`. Kinds 0..4 mean pass, move, recruit infantry, fortify and build/upgrade settlement. Kinds 5/6 recruit cavalry/siege; kinds 7/8 explicitly train one existing infantry into cavalry/siege. Kinds 9/10 are the global extend-campaign and accept-draw decisions.
+- `Action` has `kind`, `from`, `to`, `amount`. Kinds 0..4 mean pass, move, recruit infantry, fortify and build/upgrade settlement. Kinds 5/6 recruit cavalry/siege; kinds 7/8 explicitly train one existing infantry into cavalry/siege. Kinds 9/10 are the global extend-campaign and accept-draw decisions. Kind 11 specializes a town, 12 builds a shared crossing, and 13 researches a kingdom development.
 - `Actions.len` marks how much of its fixed array is populated.
 
 A few Fe features used here:
@@ -50,7 +50,7 @@ Read `map_width`, `map_height`, `hex_distance`, `neighbor`, `terrain` and `passa
 
 Coordinates are axial: q is the column and r the row. `neighbor` enumerates six directions and returns the sentinel `MAX_TILES` outside the map. Callers check it before indexing. Mountains and rivers are impassable. Fixed bridges cross the central river, and the wider maps have a central widening that creates real land detours.
 
-`hex_distance` measures unobstructed distance. `route_distances` uses exact breadth-first traversal of passable hexes; `travel_distance` is its point-to-point wrapper. `navigation` builds distance arrays from both capitals. `choose` supplies this Navigation capability once, and the cached evaluation/ranking/search functions reuse it for every trial state. Those distances ignore ownership and describe fixed terrain routes. Supply deliberately uses a separate ownership-sensitive traversal. V7 construction replaces this fixed-topology assumption with four cached route variants; each trial selects the variant for its own bridge mask. See the v7 section below.
+`hex_distance` measures unobstructed distance. `route_distances` uses exact breadth-first traversal of passable hexes; `travel_distance` is its point-to-point wrapper. `navigation` builds distance arrays from both capitals. `choose` supplies this Navigation capability once, and the cached evaluation/ranking/search functions reuse it for every trial state. Those distances ignore ownership. Construction uses four cached route variants; each trial selects the variant for its own bridge mask. Supply deliberately uses a separate ownership-sensitive traversal. See the v7 construction section below for the design history.
 
 The browser receives coordinates and terrain from Fe. Its layout code does not decide adjacency.
 
@@ -60,7 +60,7 @@ Read `legal`, then `is_legal`.
 
 `legal` checks ownership, supply, resources, settlement requirements, stack limits, passability and adjacency. It offers half-stack and all-but-one moves where allowed. `is_legal` requires a submitted order to exactly match that list.
 
-Specialists require a supplied town (settlement level 2). Recruiting cavalry costs 4 gold and 2 food; siege costs 5 gold and 3 food. Recruitment adds one troop and needs room below the 12-troop cap. Training costs the same resources and an order but converts one existing infantry, preserving total headcount. It is available at the cap, but requires infantry to convert. Neither movement nor friendly merging silently changes troop types.
+Specialists require a supplied town (settlement level 2). Base cavalry recruitment costs 4 gold and 2 food; siege costs 5 gold and 3 food. A supplied Arsenal reduces either gold price by one. Muster can reduce infantry recruitment at a supplied Arsenal; read `recruitment_gold` for the shared authoritative price path. Recruitment adds one troop and needs room below the 12-troop cap. Training costs the same resources and an order but converts one existing infantry, preserving total headcount. It is available at the cap, but requires infantry to convert. Neither movement nor friendly merging silently changes troop types.
 
 `apply` assumes prior validation, or an action selected directly from `legal`. It is not a public apply-any-integers function. Both the replay loop and AI respect this boundary. The browser can safely group buttons by territory because it filters an Fe-generated list instead of recreating legal-move rules.
 
@@ -205,7 +205,7 @@ Read the named evaluation components and their total together. The same total ra
 
 Only the last two actual automated decisions are returned, sufficient for an ordinary Red turn. The action replay remains minimal and authoritative; a replay-only load has no saved search explanation. Follow the native trace index when matching a report to an action. Per-decision nodes and configured action-ply depth describe effort, not guaranteed strength or exhaustive search.
 
-### Verified current-v7 browser/Fe boundary example
+### Verified v7 browser/Fe boundary example (historical)
 
 At implementation commit `0517958`, replay-only loading the Small opening A1 → B1 with 5 and B1 → B2 with 7 returns exactly two actions, Red to move with 2 orders on side-turn 2. Requesting an automatic response adds two actual Easy Red recruitment orders at E2 (tile 9), then returns Blue with 2 orders on turn 3. The two new reports identify trace indexes 2 and 3, normal-advancement focus targeting Blue's capital, configured depth 1 and 19/25 reported nodes. This was verified through the isolated local HTTP adapter, not by a browser click test. Different future policies may legitimately choose other orders; preserve the implementation/replay version when teaching this exact trace.
 
