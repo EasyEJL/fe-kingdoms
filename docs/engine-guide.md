@@ -221,3 +221,9 @@ The kingdom-development slice is a small example of adding a rule without moving
 6. Replay stores only the ordinary action sequence. Rebuilding it reproduces knowledge and economy. Frozen v7 follows its own engine; a version number is not a safe migration operation.
 
 Stage A deliberately retains the prior evaluator. New legal research does not imply that the old short-horizon opponent will invest well. The planned next experiment changes Fe investment valuation under identical v8 rules, preserving a pinned Stage A baseline for comparison. The observed policy behavior, not just successful compilation, determines whether that change is useful.
+
+### Separate physical forecasts from policy estimates
+
+The B experiment adds `investment_demand` and `investment_estimate` to Fe evaluation. They project a fixed current board for twelve own turns, comparing operational developments with their effects removed and allowing only a finite shared recruitment schedule. This is a conditional heuristic, not a future legal-action plan. Physical research previews still come directly from `apply` and are unchanged between A and B.
+
+The estimate is part of the existing economy score. It replaces Rotation's old food-net reward so the same production is not counted twice; root food focus can therefore have an offsetting economy correction. Individual score components are additive accounting terms, not independent causal promises. Read the experiment document for exact assumptions and observed decisions before treating a positive evaluation change as strategic proof.

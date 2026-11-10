@@ -501,8 +501,8 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  assert.match(get('development-list').children[2].textContent,/Infantry recruitment at a supplied Arsenal costs 2 gold instead of 3; food cost, headcount and order cost are unchanged/);
  let researchButtons=orderButtons(openCards()[0]);assert.equal(researchButtons.length,1);assert.match(researchButtons[0].children[0].textContent,/Research Town Charter at A2.*kingdom knowledge/);
  assert.match(researchButtons[0].children[1].textContent,/11 gold, 4 food.*Permanent kingdom knowledge.*capture does not transfer/);
- assert.match(researchButtons[0].children[1].textContent,/Blue known Town Charter; active Town Charter; 23 gold stored; 17 gold income, 19 food production, 21 food upkeep/);
- assert.match(researchButtons[0].children[1].textContent,/Red known Crop Rotation, Organized Muster; active Crop Rotation; 24 gold stored; 18 gold income, 20 food production, 22 food upkeep/);
+ assert.match(researchButtons[0].children[1].textContent,/Blue: learns Town Charter; active: Town Charter; gold 8 -> 23; gold income 3 -> 17; food production 3 -> 19; food upkeep 3 -> 21/);
+ assert.match(researchButtons[0].children[1].textContent,/Red: learns Crop Rotation; active: Crop Rotation; learns Organized Muster; gold 8 -> 24; gold income 3 -> 18; food production 3 -> 20; food upkeep 3 -> 22/);
  before=fetches;await run('perform('+JSON.stringify(rotation)+','+JSON.stringify(researchPreview)+')');assert.equal(fetches,before);
  // Even nonstandard requirements/status/prices are shown verbatim, not inferred from matching buildings or resources.
  setGame({...researchTown,developments:[{...developmentRows[1],goldCost:13,foodCost:9,orderCost:2,prerequisite:3,prerequisiteMet:1,town:0,affordable:0,eligible:0,known:1,active:0}]});
@@ -519,7 +519,7 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  // Capture the originating development forecast before a request, not the successor's unrelated action index.
  setGame(researchTown);run('selected=5;render()');const researched={...researchTown,actions:[charter],state:{...start.state,orders:1},developments:developmentRows.map(d=>d.side===1&&d.id===1?{...d,known:1,active:1,eligible:0}:d),legal:[pass,rotation,muster],previews:[{outcome:0},{...researchPreview,index:1},{...researchPreview,index:2}],developmentPreviews:[{...charterProjection,blueGoldIncome:999}]};
  reply(researched);before=fetches;const researchClick=orderButtons(openCards()[0])[0],researching=researchClick.onclick();await researchClick.onclick();await researching;assert.equal(fetches,before+1);assert.equal(requests.at(-1).version,8);assert.deepEqual(requests.at(-1).actions,[charter]);
- assert.match(get('human-activity').textContent,/Researched Town Charter.*17 gold income/);assert.doesNotMatch(get('human-activity').textContent,/999 gold income/);
+ assert.match(get('human-activity').textContent,/Researched Town Charter.*learns Town Charter; active: Town Charter.*gold income 3 -> 17/);assert.doesNotMatch(get('human-activity').textContent,/999/);
  assert.equal(run('replay().developments'),undefined);assert.equal(run('replay().developmentPreviews'),undefined);assert.equal(get('development-list').children[0].textContent.includes('Known; benefit active'),true);
  // Rejection preserves progression and the successful v8 checkpoint; no research is locally applied.
  const checkpointBeforeResearchFailure=storage.get(checkpointKey);response={ok:false,json:async()=>({error:'Research rejected'})};await run('perform('+JSON.stringify(rotation)+','+JSON.stringify(researchPreview)+')');assert.equal(run('game.actions.length'),1);assert.equal(storage.get(checkpointKey),checkpointBeforeResearchFailure);
@@ -528,8 +528,25 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  assert.equal(get('developments').hidden,true);assert.equal(get('development-list').children.length,0);assert.equal(storage.get(checkpointKey),checkpointBeforeResearchFailure);assert.equal(get('frontiers').hidden,false);
  before=fetches;await run('perform('+JSON.stringify(charter)+','+JSON.stringify(researchPreview)+')');assert.equal(fetches,before);assert.equal(get('snapshot-save').disabled,true);assert.equal(get('snapshot-save').onclick(),false);
  assert.equal(run('replay().version'),7);assert.equal(storage.get('fe-kingdoms-v7'),frontiersSaved);assert.equal(storage.get('fe-kingdoms-v7-slots-v1'),frontiersSlots);
- assert.doesNotMatch(run('forecast('+JSON.stringify(charter)+','+JSON.stringify(researchPreview)+')'),/Fe kingdom afterstate/);
+ assert.doesNotMatch(run('forecast('+JSON.stringify(charter)+','+JSON.stringify(researchPreview)+')'),/Fe changes/);
  assert.equal(run('CURRENT_VERSION'),8);assert.equal(run('CHECKPOINT'),'fe-kingdoms-v8');assert.equal(run('SNAPSHOTS'),'fe-kingdoms-v8-slots-v1');
  assert.ok(demos.every(d=>d.replay.version===8&&/V8-derived.*revalidated under v8 rules/.test(d.source)&&/not a recorded v8 match/.test(d.source)));
+ // Routine unchanged kingdom forecasts add no narration; only differing Fe values are shown.
+ setGame(researchTown);const unchangedKingdom={actionIndex:1,...JSON.parse(run('JSON.stringify(developmentBaseline())'))};
+ const routine={...researchTown,legal:[pass,move],previews:[{outcome:0},{...preview,index:1,outcome:1}],developmentPreviews:[unchangedKingdom]};setGame(routine);
+ const routineText=run('forecast('+JSON.stringify(move)+',game.previews[1])');assert.doesNotMatch(routineText,/Fe changes|known|active:|gold income|food production|food upkeep/);
+ setGame({...routine,developmentPreviews:[]});assert.equal(run('forecast('+JSON.stringify(move)+',game.previews[1])'),routineText);
+ setGame({...routine,developmentPreviews:[{...unchangedKingdom,blueGoldAfter:7}]});assert.equal(run('developmentForecast(game.developmentPreviews[0],developmentBaseline())'),' Fe changes: Blue: gold 8 -> 7.');
+ // Supply-related suspension/restoration remains explicit before committing an otherwise ordinary move.
+ const suppliedKnowledge=developmentRows.map(d=>d.side===1&&d.id===1?{...d,known:1,active:1}:d);
+ const suspendedProjection={...unchangedKingdom,blueKnownMask:1,blueActiveMask:0,blueGoldIncome:2};
+ const supplyMove={...routine,developments:suppliedKnowledge,developmentPreviews:[suspendedProjection]};setGame(supplyMove);
+ assert.match(run('forecast('+JSON.stringify(move)+',game.previews[1])'),/Fe changes: Blue: suspended: Town Charter; gold income 3 -> 2/);
+ assert.doesNotMatch(run('forecast('+JSON.stringify(move)+',game.previews[1])'),/Red:|learns|food production|food upkeep/);
+ const suspendedRows=suppliedKnowledge.map(d=>d.side===1&&d.id===1?{...d,active:0}:d),suspendedEconomy=start.economy.map(e=>e.side===1?{...e,goldIncome:2}:e);
+ reply({...supplyMove,actions:[move],developments:suspendedRows,economy:suspendedEconomy});await run('perform('+JSON.stringify(move)+',game.previews[1])');
+ assert.match(get('human-activity').textContent,/suspended: Town Charter; gold income 3 -> 2/); // Must compare captured pre-action values, not this successor state.
+ setGame({...routine,developments:suspendedRows,economy:suspendedEconomy,developmentPreviews:[{...unchangedKingdom,blueKnownMask:1,blueActiveMask:1}]});
+ assert.match(run('forecast('+JSON.stringify(move)+',game.previews[1])'),/Fe changes: Blue: active: Town Charter; gold income 2 -> 3/);
  console.log('UI unit tests passed: v8 Fe-driven development rows/research/forecasts, isolated v1..v8 checkpoints and v7 slots, named snapshot safeguards and write-free prepared practice. Mocked DOM/transport, not browser or human playtesting.');
 })().catch(e=>{console.error(e);process.exitCode=1});

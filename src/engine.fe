@@ -750,6 +750,107 @@ fn evaluate(_ s: State, _ root: i64) -> i64 {
 fn evaluate_cached(_ s: State, _ root: i64) -> i64 uses (routes: Navigation) {
     evaluation_total(breakdown_cached(s, root, Focus { kind: 4, target: capital(s, 3 - root) }))
 }
+// Policy B only: conditional, fixed-board cash flows, not additional game rules.
+struct InvestmentDemand { town: usize, recruits: i64 }
+impl Copy for InvestmentDemand {}
+struct InvestmentEstimate { value: i64, rotation: i64, recruits: i64 }
+impl Copy for InvestmentEstimate {}
+// Choose one existing infantry recruiting site without reading discoveries.
+// Capacity is finite: its own room plus adjacent supplied friendly frontier
+// room, bounded by visible nearby enemy troops minus local mobile defenders.
+// One recruit and at most one infantry distribution order per future turn is
+// a throughput assumption, not a promise of a legal multi-turn move sequence.
+fn investment_demand(_ s: State, _ side: i64, _ connected: [bool; 64]) -> InvestmentDemand {
+    var best = InvestmentDemand { town: MAX_TILES, recruits: 0 }
+    for index in 0 .. tile_count(s) {
+        let town = if side == 1 { index } else { tile_count(s) - 1 - index }
+        if s.owner[town] == side && connected[town] && s.troops[town] <= 10
+            && s.cavalry[town] == 0 && s.siege[town] == 0
+            && (terrain(s, town) == 4 || s.settlement[town] > 0) {
+            var enemies = [false; 64]
+            var pressure: i64 = 0
+            var room: i64 = 0
+            var defenders: i64 = 0
+            for location in 0 .. 7 {
+                let tile = if location == 6 { town } else { neighbor(s, town, location) }
+                if tile < tile_count(s) && s.owner[tile] == side && connected[tile] {
+                    var frontier = false
+                    for direction in 0 .. 6 {
+                        let enemy = neighbor(s, tile, direction)
+                        if enemy < tile_count(s) && s.owner[enemy] == 3 - side && s.troops[enemy] > 1 {
+                            if !enemies[enemy] { pressure += s.troops[enemy] - 1 }
+                            enemies[enemy] = true
+                            frontier = true
+                        }
+                    }
+                    if frontier {
+                        room += MAX_TROOPS - s.troops[tile]
+                        defenders += s.troops[tile] - 1
+                    }
+                }
+            }
+            let missing = imin(room, imax(0, pressure - defenders))
+            let count = imin(12, missing / 2)
+            if count > best.recruits { best = InvestmentDemand { town, recruits: count } }
+        }
+    }
+    best
+}
+fn investment_estimate(_ s: State, _ side: i64, _ connected: [bool; 64], _ budget: Economy) -> InvestmentEstimate {
+    let active = active_developments(s, side, connected)
+    if active == 0 { return InvestmentEstimate { value: 0, rotation: 0, recruits: 0 } }
+    let charter: i64 = if active % 2 == 1 { 1 } else { 0 }
+    var rotation: i64 = 0
+    if (active / 2) % 2 == 1 {
+        for i in 0 .. tile_count(s) {
+            if s.owner[i] == side && connected[i] && terrain(s, i) == 1 { rotation += 1 }
+        }
+        rotation = imin(rotation, 2)
+    }
+    let demand = investment_demand(s, side, connected)
+    let muster: i64 = if (active / 4) % 2 == 1 && demand.town < MAX_TILES
+        && s.settlement[demand.town] == 2 && s.specialty[demand.town] == 2 { 1 } else { 0 }
+    let player: usize = side.downcast_unchecked()
+    var gold = s.gold[player]
+    var food = s.food[player]
+    var plain_gold = gold
+    var plain_food = food
+    var recruited: i64 = 0
+    var value: i64 = 0
+    for turn in 0 .. 12 {
+        let old_gold = gold
+        let old_food = food
+        let old_plain_gold = plain_gold
+        let old_plain_food = plain_food
+        gold = imin(RESOURCE_CAP, gold + budget.gold_income)
+        plain_gold = imin(RESOURCE_CAP, plain_gold + budget.gold_income - charter)
+        food = imin(RESOURCE_CAP, food + budget.food_production)
+        plain_food = imin(RESOURCE_CAP, plain_food + budget.food_production - rotation)
+        // Each hypothetical two-infantry reinforcement adds at most one upkeep.
+        // No future casualties, farm conquest or infrastructure are assumed.
+        let upkeep = budget.food_upkeep + recruited
+        let paid = imin(food, upkeep)
+        let plain_paid = imin(plain_food, upkeep)
+        food -= paid
+        plain_food -= plain_paid
+        // Identical purchases in both counterfactuals. Benefits cannot manufacture
+        // demand or claim recruits the no-discovery economy cannot afford.
+        if recruited < demand.recruits && gold >= 3 - muster && plain_gold >= 3
+            && food >= 2 && plain_food >= 2 && paid == upkeep && plain_paid == upkeep {
+            gold -= 3 - muster
+            plain_gold -= 3
+            food -= 2
+            plain_food -= 2
+            recruited += 1
+        }
+        // Twice resource value * full/half discount, without fractional scores.
+        // Count extra rations consumed by upkeep as useful, not as lost output.
+        let weight: i64 = if turn < 6 { 2 } else { 1 }
+        value += weight * ((gold - old_gold) - (plain_gold - old_plain_gold)
+            + (food - old_food) - (plain_food - old_plain_food) + paid - plain_paid)
+    }
+    InvestmentEstimate { value, rotation, recruits: recruited }
+}
 fn breakdown_cached(_ s: State, _ root: i64, _ focus: Focus) -> Evaluation uses (routes: Navigation) {
     var parts = [0; 8]
     if s.result != 0 {
@@ -811,6 +912,13 @@ fn breakdown_cached(_ s: State, _ root: i64, _ focus: Focus) -> Evaluation uses 
         (enemy_budget.food_production - enemy_budget.food_upkeep) * 5
     parts[3] -= own_budget.shortage * 25
     parts[3] += enemy_budget.shortage * 25
+    let own_investment = investment_estimate(s, root, own_supply, own_budget)
+    let enemy_investment = investment_estimate(s, 3 - root, enemy_supply, enemy_budget)
+    // Replace, rather than duplicate, rotation's existing food-net weight.
+    // Keep immediate shortage penalties and all non-development scoring intact.
+    let own_food_weight: i64 = if focus.kind == 3 { 8 } else { 5 }
+    parts[3] += own_investment.value - enemy_investment.value -
+        own_food_weight * own_investment.rotation + 5 * enemy_investment.rotation
     if focus.kind == 1 {
         parts[6] = 2 * defense(s, focus.target) - 50 * direct_capital_threats(s, root)
     } else if focus.kind == 2 {

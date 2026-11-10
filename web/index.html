@@ -73,10 +73,31 @@ function developmentPreview(a){
  const index=game.legal.findIndex(legal=>legal.length===a.length&&legal.every((value,i)=>value===a[i]));
  return game.developmentPreviews?.find(p=>p.actionIndex===index);
 }
-function developmentForecast(p){
+function developmentBaseline(){
+ const before={};if(game?.version<8)return before;
+ for(const [side,prefix] of [[1,'blue'],[2,'red']]){
+  const rows=(game.developments||[]).filter(d=>d.side===side),economy=game.economy?.find(e=>e.side===side);
+  if(rows.length===3)for(const [field,flag] of [['KnownMask','known'],['ActiveMask','active']])before[prefix+field]=rows.reduce((mask,d)=>mask|(d[flag]?(1<<(d.id-1)):0),0);
+  before[prefix+'GoldAfter']=game.state['gold'+side];before[prefix+'GoldIncome']=economy?.goldIncome;before[prefix+'FoodProduction']=economy?.foodProduction;before[prefix+'Upkeep']=economy?.foodUpkeep;
+ }
+ return before;
+}
+function developmentForecast(p,before){
  if(!p||game?.version<8)return '';
- const list=mask=>[1,2,3].filter(id=>mask&(1<<(id-1))).map(developmentName).join(', ')||'none';
- return ' Fe kingdom afterstate: '+[['Blue','blue'],['Red','red']].map(([label,prefix])=>label+' known '+list(p[prefix+'KnownMask'])+'; active '+list(p[prefix+'ActiveMask'])+'; '+p[prefix+'GoldAfter']+' gold stored; '+p[prefix+'GoldIncome']+' gold income, '+p[prefix+'FoodProduction']+' food production, '+p[prefix+'Upkeep']+' food upkeep').join(' | ')+'.';
+ const sides=[];
+ for(const [label,prefix] of [['Blue','blue'],['Red','red']]){
+  const changes=[];
+  for(const id of [1,2,3])for(const [field,on,off] of [['KnownMask','learns ','no longer knows '],['ActiveMask','active: ','suspended: ']]){
+   const next=p[prefix+field],previous=before?.[prefix+field],bit=1<<(id-1);
+   if(next!==undefined&&(previous===undefined?next&bit:(next&bit)!==(previous&bit)))changes.push((previous===undefined&&field==='KnownMask'?'known: ':next&bit?on:off)+developmentName(id));
+  }
+  for(const [field,name] of [['GoldAfter','gold'],['GoldIncome','gold income'],['FoodProduction','food production'],['Upkeep','food upkeep']]){
+   const next=p[prefix+field],previous=before?.[prefix+field];
+   if(next!==undefined&&next!==previous)changes.push(name+' '+(previous===undefined?'':previous+' -> ')+next);
+  }
+  if(changes.length)sides.push(label+': '+changes.join('; '));
+ }
+ return sides.length?' Fe changes: '+sides.join(' | ')+'.':'';
 }
 const specialtyEffect=value=>value===1?'+2 food production per turn while supplied.':value===2?'Cavalry/siege recruitment and paid training cost 1 less gold while supplied.':'';
 const specialtyDetail=t=>t.specialty?'Specialty: '+specialtyNames[t.specialty]+' (permanent). '+specialtyEffect(t.specialty)+(t.supplied?'':' Benefit inactive: town is cut off.')+' Capture preserves this choice.':'';
@@ -249,7 +270,7 @@ function forecastText(a,p,done=false){
  if(p.outcome===6)return p.cost+' gold'+(p.foodCost?', '+p.foodCost+' food':'')+'. '+(done?'Settlement is now ':'Would become ')+(settlementNames[p.settlementAfter]??('level '+p.settlementAfter))+'.';
  return '';
 }
-function forecast(a,p,done=false,development){
+function forecast(a,p,done=false,development,developmentBefore){
  let text=forecastText(a,p,done);
  if(!p)return text;
  if(a[0]===1&&p.movingInfantry!==undefined){
@@ -260,7 +281,7 @@ function forecast(a,p,done=false,development){
  if(p.targetInfantry!==undefined&&a[0]!==0)text+=' Target after: '+composition(p.targetInfantry,p.targetCavalry,p.targetSiege)+'.';
  if(game?.version>=7&&p.orderCost!==undefined&&!isDecision(a)&&a[0]!==0){text+=' '+(done?'Used ':'Order cost: ')+p.orderCost+' '+(p.orderCost===1?'order':'orders')+'.';if(!p.result&&p.nextSide!==undefined&&p.nextOrders!==undefined)text+=' Fe afterstate: '+names[p.nextSide]+' turn, '+p.nextOrders+' '+(p.nextOrders===1?'order':'orders')+' remaining.';}
  if(!done&&game?.version>=7&&a[0]===1&&p.orderCost===2&&p.outcome===2&&!p.result&&p.nextSide===2)text+=' Uses both orders; no order remains to fortify after capture.';
- return text+supplyForecast(p,done)+developmentForecast(done?development:developmentPreview(a));
+ return text+supplyForecast(p,done)+developmentForecast(done?development:developmentPreview(a),done?developmentBefore:developmentBaseline());
 }
 function supplyForecast(p,done=false){
  if(!p||game?.version<6)return '';
@@ -390,7 +411,7 @@ function perform(a,p){
  if(a[0]===10&&!confirm('Accept a draw and end this match? This decision will be recorded in the replay.'))return Promise.resolve(false);
  if(a[0]===0&&!confirm('End your turn now and give up '+game.state.orders+' remaining '+(game.state.orders===1?'order':'orders')+'?'))return Promise.resolve(false);
  if(p&&p.outcome===3&&!confirm(forecast(a,p)+' Send this attack anyway?'))return Promise.resolve(false);
- return request(payload(1,[...game.actions,a]),false,{kind:'human',action:a,preview:p,development:developmentPreview(a)});
+ return request(payload(1,[...game.actions,a]),false,{kind:'human',action:a,preview:p,development:developmentPreview(a),developmentBefore:developmentBaseline()});
 }
 async function request(payload, resetSelection=false, feedback={},locked=false){
  if(busy&&!locked)return false;setBusy(true);$('error').textContent='';$('notice').textContent=payload.mode===0&&payload.actions.length?'Red is planning its orders...':'Fe is checking your order...';
@@ -404,7 +425,7 @@ async function request(payload, resetSelection=false, feedback={},locked=false){
   render();if(!feedback.skipCheckpoint)checkpoint();$('notice').textContent='';
   if(feedback.kind==='human'){
    if(isDecision(feedback.action))$('activity').textContent='';
-   $('human-activity').textContent='Your last order: '+actionName(feedback.action)+'. '+forecast(feedback.action,feedback.preview,true,feedback.development);
+   $('human-activity').textContent='Your last order: '+actionName(feedback.action)+'. '+forecast(feedback.action,feedback.preview,true,feedback.development,feedback.developmentBefore);
    if(game.state.side===2&&!game.state.result&&!paused()&&!isDecision(feedback.action)&&feedback.action[0]!==0)$('turn-guide').textContent='You used both orders. Review the board, then press Run computer turn. Red has not moved yet.';
   }
   const computerActions=payload.mode===0?data.actions.slice(payload.actions.length):[];

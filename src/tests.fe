@@ -1712,7 +1712,7 @@ fn development_graph_replays_from_initial_with_no_knowledge_in_save() {
     assert(same_campaign(s, replay))
 }
 #[test]
-fn every_development_mask_is_bounded_and_baseline_has_no_purchase_bonus() {
+fn every_development_mask_is_bounded_and_investment_is_explicit() {
     for mask in 0 .. 8 {
         var s = initial(0)
         s.settlement[5] = 2
@@ -1737,9 +1737,10 @@ fn every_development_mask_is_bounded_and_baseline_has_no_purchase_bonus() {
     s.settlement[5] = 2
     let before = evaluate(s, 1)
     let after = apply(s, research(5, 1))
-    // Stage A intentionally has the original gold-stock evaluation: no invented
-    // asset/option bonus. Policy B must be a separately tested same-rules change.
-    assert(evaluate(after, 1) == before - 12)
+    // A's exact -12 purchase penalty is preserved in the liquid-resource term.
+    // B adds only the documented finite-horizon operational estimate.
+    let estimate = investment_estimate(after, 1, supply(after, 1), economy(after, 1))
+    assert(evaluate(after, 1) == before - 12 + estimate.value)
 }
 #[test]
 fn research_never_displaces_immediate_capital_wins_or_needed_defense() {
@@ -1797,6 +1798,204 @@ fn both_kingdoms_research_and_dense_developed_boards_fit_action_capacity() {
             var count: usize = 0
             for i in 0 .. choices.len { if choices.items[i].kind == 13 { count += 1 } }
             assert(count == 1)
+        }
+    }
+}
+
+fn investment_frontier() -> State {
+    var s = initial(2)
+    s.settlement[1] = 2
+    s.specialty[1] = 2
+    s.owner[10] = 1
+    s.troops[10] = 1
+    s.owner[2] = 2
+    s.troops[2] = 12
+    s.owner[11] = 2
+    s.troops[11] = 12
+    s.gold[1] = 8
+    s.food[1] = 40
+    s
+}
+#[test]
+fn investment_demand_is_finite_discovery_independent_and_requires_real_frontier() {
+    var s = investment_frontier()
+    let connected = supply(s, 1)
+    let demand = investment_demand(s, 1, connected)
+    assert(demand.town < MAX_TILES && demand.recruits > 0 && demand.recruits <= 12)
+    for mask in 0 .. 8 {
+        s.developments[1] = mask
+        let same = investment_demand(s, 1, connected)
+        assert(same.town == demand.town && same.recruits == demand.recruits)
+    }
+    s.owner[2] = 0
+    s.owner[11] = 0
+    assert(investment_demand(s, 1, supply(s, 1)).recruits == 0)
+    s = investment_frontier()
+    for i in 0 .. tile_count(s) { if s.owner[i] == 1 { s.troops[i] = 12 } }
+    assert(investment_demand(s, 1, supply(s, 1)).recruits == 0)
+    s = investment_frontier()
+    s.owner[0] = 2
+    assert(investment_demand(s, 1, supply(s, 1)).recruits == 0)
+}
+#[test]
+fn investment_tracks_caps_supply_and_actual_resource_payback_not_ownership() {
+    var s = initial(0)
+    s.settlement[5] = 2
+    s.developments[1] = 1
+    s.gold[1] = 0
+    let low = investment_estimate(s, 1, supply(s, 1), economy(s, 1))
+    assert(low.value > 0 && low.value <= 18 && low.recruits == 0)
+    s.gold[1] = 40
+    let capped = investment_estimate(s, 1, supply(s, 1), economy(s, 1))
+    assert(capped.value == 0 && capped.recruits == 0)
+    s.owner[0] = 2
+    assert(investment_estimate(s, 1, supply(s, 1), economy(s, 1)).value == 0)
+    s = investment_frontier()
+    s.developments[1] = 5
+    let supported = investment_estimate(s, 1, supply(s, 1), economy(s, 1))
+    assert(supported.recruits > 0 && supported.recruits <= 12 && supported.value > 0)
+    s.food[1] = 0
+    let poor = investment_estimate(s, 1, supply(s, 1), economy(s, 1))
+    assert(poor.recruits < supported.recruits)
+    s = initial(0)
+    s.settlement[5] = 2
+    s.specialty[5] = 2
+    s.developments[1] = 4
+    assert(investment_estimate(s, 1, supply(s, 1), economy(s, 1)).value == 0)
+    // No option value for an unbuilt/inactive branch.
+    s.developments[1] = 2
+    assert(investment_estimate(s, 1, supply(s, 1), economy(s, 1)).value == 0)
+}
+#[test]
+fn investment_replaces_rotation_food_net_and_preserves_component_sums() {
+    var s = initial(0)
+    s.settlement[5] = 2
+    s.specialty[5] = 1
+    s.food[1] = 40
+    s.developments[1] = 1
+    let routes = navigation(s)
+    let connected = supply(s, 1)
+    for kind in 3 .. 5 {
+        let focus = Focus { kind: kind.downcast_unchecked(), target: MAX_TILES }
+        let before = with (Navigation = routes) { breakdown_cached(s, 1, focus) }
+        let old_estimate = investment_estimate(s, 1, connected, economy(s, 1))
+        var changed = s
+        changed.developments[1] = 3
+        let after = with (Navigation = routes) { breakdown_cached(changed, 1, focus) }
+        let new_estimate = investment_estimate(changed, 1, connected, economy(changed, 1))
+        assert(new_estimate.rotation == 1)
+        assert(evaluation_total(after) - evaluation_total(before) == new_estimate.value - old_estimate.value)
+    }
+    // Food focus rewards only root's food net. Enemy rotation must cancel five,
+    // never eight, points per production unit under that same frozen focus.
+    s.settlement[9] = 2
+    s.specialty[9] = 1
+    s.food[2] = 40
+    s.developments[2] = 1
+    let enemy_supply = supply(s, 2)
+    let focus = Focus { kind: 3, target: MAX_TILES }
+    let before_enemy = with (Navigation = routes) { breakdown_cached(s, 1, focus) }
+    let old_enemy = investment_estimate(s, 2, enemy_supply, economy(s, 2))
+    var enemy_changed = s
+    enemy_changed.developments[2] = 3
+    let after_enemy = with (Navigation = routes) { breakdown_cached(enemy_changed, 1, focus) }
+    let new_enemy = investment_estimate(enemy_changed, 2, enemy_supply, economy(enemy_changed, 2))
+    assert(new_enemy.rotation == 1)
+    assert(evaluation_total(after_enemy) - evaluation_total(before_enemy) == old_enemy.value - new_enemy.value)
+    s = investment_frontier()
+    s.developments[1] = 5
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let decision = with (Search = stats) { decide(s, difficulty.downcast_unchecked()) }
+        var delta: i64 = 0
+        for i in 0 .. 8 { delta += decision.deltas[i] }
+        assert(delta == decision.after_score - decision.before_score)
+    }
+}
+#[test]
+fn valuation_is_pure_for_every_legal_transition_and_supply_cut_remains_tactical() {
+    var s = investment_frontier()
+    s.developments[1] = 5
+    let original = s
+    let choices = legal(s)
+    for i in 0 .. choices.len {
+        let expected = apply(s, choices.items[i])
+        let score = evaluate(expected, 1)
+        let actual = apply(s, choices.items[i])
+        assert(same_campaign(expected, actual) && same_campaign(s, original))
+        assert(score == evaluate(actual, 1))
+    }
+    s = bridge_cut_position()
+    s.settlement[0] = 2
+    s.developments[1] = 1
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let action = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        let after = apply(s, action)
+        assert(supply_count(after, 2).cut_off > supply_count(s, 2).cut_off)
+    }
+}
+
+fn mirrored_investment_state(_ s: State) -> State {
+    var mirrored = s
+    let last = tile_count(s) - 1
+    for i in 0 .. tile_count(s) {
+        let target = last - i
+        mirrored.owner[target] = if s.owner[i] == 0 { 0 } else { 3 - s.owner[i] }
+        mirrored.troops[target] = s.troops[i]
+        mirrored.cavalry[target] = s.cavalry[i]
+        mirrored.siege[target] = s.siege[i]
+        mirrored.fort[target] = s.fort[i]
+        mirrored.settlement[target] = s.settlement[i]
+        mirrored.specialty[target] = s.specialty[i]
+    }
+    for side in 1 .. 3 {
+        mirrored.gold[3 - side] = s.gold[side]
+        mirrored.food[3 - side] = s.food[side]
+        mirrored.developments[3 - side] = s.developments[side]
+    }
+    mirrored.side = 3 - s.side
+    if s.result == 1 || s.result == 2 { mirrored.result = 3 - s.result }
+    mirrored.bridge_mask = (s.bridge_mask % 2) * 2 + s.bridge_mask / 2
+    mirrored
+}
+#[test]
+fn mirrored_investment_estimates_and_equal_demand_ties_match_both_seats() {
+    var s = investment_frontier()
+    // Towns 1 and 10 see the same recipients/enemies and both offer ten
+    // recruit orders. Different specialties make a tie-direction error matter.
+    s.settlement[9] = 0
+    s.settlement[10] = 2
+    s.specialty[10] = 1
+    let first = investment_demand(s, 1, supply(s, 1))
+    assert(first.town == 1 && first.recruits == 10)
+    var without_first = s
+    without_first.settlement[1] = 0
+    without_first.specialty[1] = 0
+    let second = investment_demand(without_first, 1, supply(without_first, 1))
+    assert(second.town == 10 && second.recruits == first.recruits)
+    s.gold[2] = 17
+    s.food[2] = 21
+    for mask in 0 .. 8 {
+        s.developments[1] = mask
+        s.developments[2] = 7 - mask
+        for bridges in 0 .. 4 {
+            s.bridge_mask = bridges
+            let mirrored = mirrored_investment_state(s)
+            assert(same_campaign(s, mirrored_investment_state(mirrored)))
+            for side in 1 .. 3 {
+                let player: i64 = side.downcast_unchecked()
+                let own_supply = supply(s, player)
+                let opposite_supply = supply(mirrored, 3 - player)
+                let demand = investment_demand(s, player, own_supply)
+                let opposite_demand = investment_demand(mirrored, 3 - player, opposite_supply)
+                assert(demand.recruits == opposite_demand.recruits)
+                assert(opposite_demand.town == if demand.town == MAX_TILES { MAX_TILES } else { tile_count(s) - 1 - demand.town })
+                let estimate = investment_estimate(s, player, own_supply, economy(s, player))
+                let opposite = investment_estimate(mirrored, 3 - player, opposite_supply, economy(mirrored, 3 - player))
+                assert(estimate.value == opposite.value && estimate.rotation == opposite.rotation
+                    && estimate.recruits == opposite.recruits)
+            }
         }
     }
 }
