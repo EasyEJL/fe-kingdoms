@@ -36,6 +36,8 @@ fn check_bounds(_ s: State) {
         assert(s.owner[i] >= 0 && s.owner[i] <= 2)
         assert(s.fort[i] >= 0 && s.fort[i] <= 2)
         assert(s.settlement[i] >= 0 && s.settlement[i] <= 2)
+        assert(s.specialty[i] >= 0 && s.specialty[i] <= 2)
+        if s.specialty[i] > 0 { assert(s.settlement[i] == 2) }
         let army = army_at(s, i)
         assert(army.infantry >= 0 && army.cavalry >= 0 && army.siege >= 0)
         assert(army_size(army) == s.troops[i])
@@ -580,7 +582,7 @@ fn same_campaign(_ a: State, _ b: State) -> bool {
     for side in 0 .. 3 { if a.gold[side] != b.gold[side] || a.food[side] != b.food[side] { return false } }
     for i in 0 .. tile_count(a) {
         if a.owner[i] != b.owner[i] || a.troops[i] != b.troops[i]
-            || a.fort[i] != b.fort[i] || a.settlement[i] != b.settlement[i]
+            || a.fort[i] != b.fort[i] || a.settlement[i] != b.settlement[i] || a.specialty[i] != b.specialty[i]
             || !same_army(army_at(a, i), army_at(b, i)) { return false }
     }
     true
@@ -872,4 +874,193 @@ fn both_policies_respect_two_order_siege_and_one_order_limits() {
     }
     assert(order_cost(s, pass()) == 2)
     assert(order_cost(s, extend_campaign()) == 0 && order_cost(s, accept_draw()) == 0)
+}
+
+// V7 PERMANENT TOWN SPECIALTIES
+#[test]
+fn specialties_require_supplied_towns_and_pay_once_without_replacement() {
+    for choice in 1 .. 3 {
+        var s = initial(0)
+        let action = Action { kind: 11, from: 5, to: 5, amount: choice.downcast_unchecked() }
+        assert(!is_legal(s, action))
+        s.settlement[5] = 2
+        assert(is_legal(s, action))
+        assert(!is_legal(s, Action { kind: 11, from: 5, to: 1, amount: action.amount }))
+        assert(!is_legal(s, Action { kind: 11, from: 5, to: 5, amount: 0 }))
+        assert(!is_legal(s, Action { kind: 11, from: 5, to: 5, amount: 3 }))
+        s.gold[1] = 5
+        assert(!is_legal(s, action))
+        s.gold[1] = 6
+        s.food[1] = 1
+        assert(!is_legal(s, action))
+        s.food[1] = 2
+        s.owner[0] = 2
+        assert(!is_legal(s, action))
+        s.owner[0] = 1
+        let before_army = army_at(s, 5)
+        let after = apply(s, action)
+        assert(after.specialty[5] == action.amount && after.settlement[5] == 2)
+        assert(after.gold[1] == 0 && after.food[1] == 0 && after.orders == 1)
+        assert(order_cost(s, action) == 1 && same_army(army_at(after, 5), before_army))
+        s = after
+        s.gold[1] = 40
+        s.food[1] = 40
+        assert(!is_legal(s, Action { kind: 11, from: 5, to: 5, amount: 1 }))
+        assert(!is_legal(s, Action { kind: 11, from: 5, to: 5, amount: 2 }))
+        check_bounds(s)
+    }
+}
+#[test]
+fn arsenal_discounts_recruitment_and_training_without_bypassing_caps_or_supply() {
+    for kind in 5 .. 9 {
+        var s = initial(0)
+        s.settlement[5] = 2
+        s.specialty[5] = 2
+        let role: i64 = if kind == 5 || kind == 7 { 1 } else { 2 }
+        let action = Action { kind: kind.downcast_unchecked(), from: 5, to: 5, amount: 1 }
+        let gold = unit_profile(role).recruit_gold - 1
+        let food = unit_profile(role).recruit_food
+        s.gold[1] = gold
+        s.food[1] = food
+        if kind >= 7 { s.troops[5] = 12 }
+        assert(recruitment_gold(s, 5, role, true) == gold)
+        assert(recruitment_gold(s, 5, role, false) == gold + 1)
+        assert(recruitment_gold(s, 5, 0, true) == 3)
+        assert(is_legal(s, action))
+        let before = army_at(s, 5)
+        let after = apply(s, action)
+        assert(after.gold[1] == 0 && after.food[1] == 0 && after.orders == 1)
+        assert(after.troops[5] == s.troops[5] + if kind < 7 { 1 } else { 0 })
+        assert(army_at(after, 5).infantry == before.infantry - if kind >= 7 { 1 } else { 0 })
+        assert(after.cavalry[5] == if role == 1 { 1 } else { 0 })
+        assert(after.siege[5] == if role == 2 { 1 } else { 0 })
+        check_bounds(after)
+        s.specialty[5] = 0
+        assert(!is_legal(s, action))
+        s.specialty[5] = 2
+        s.owner[0] = 2
+        assert(!is_legal(s, action))
+        s.owner[0] = 1
+        s.gold[1] = 40
+        s.food[1] = 40
+        if kind < 7 { s.troops[5] = 12 }
+        else { s.cavalry[5] = s.troops[5] }
+        assert(!is_legal(s, action))
+    }
+}
+#[test]
+fn granary_uses_real_capped_economy_and_capture_keeps_specialties() {
+    var s = initial(0)
+    s.settlement[5] = 2
+    s.specialty[5] = 1
+    assert(economy(s, 1).food_production == 7)
+    s.food[1] = 40
+    assert(begin_turn(s).food[1] == 37)
+    s.food[1] = 0
+    assert(begin_turn(s).food[1] == 4)
+    for specialty in 1 .. 3 {
+        s = initial(0)
+        s.owner[6] = 1
+        s.owner[7] = 1
+        s.troops[7] = 12
+        s.owner[8] = 2
+        s.settlement[8] = 2
+        s.specialty[8] = specialty.downcast_unchecked()
+        let attack = Action { kind: 1, from: 7, to: 8, amount: 11 }
+        assert(is_legal(s, attack))
+        s = apply(s, attack)
+        assert(s.owner[8] == 1 && s.specialty[8] == specialty.downcast_unchecked())
+        assert(s.settlement[8] == 2 && supply(s, 1)[8])
+        let active = economy(s, 1)
+        s.owner[7] = 2
+        assert(!supply(s, 1)[8])
+        let cut = economy(s, 1)
+        assert(cut.food_production == active.food_production - if specialty == 1 { 2 } else { 0 })
+        assert(cut.gold_income == active.gold_income - 2)
+        let recruit = Action { kind: 5, from: 8, to: 8, amount: 1 }
+        assert(!is_legal(s, recruit))
+        s.owner[7] = 1
+        assert(economy(s, 1).food_production == active.food_production)
+        assert(s.specialty[8] == specialty.downcast_unchecked())
+        check_bounds(s)
+    }
+}
+fn hungry_town_position() -> State {
+    var s = initial(0)
+    for i in 0 .. tile_count(s) {
+        if passable(s, i) && i % map_width(s) < map_width(s) / 2 {
+            s.owner[i] = 1
+            s.troops[i] = 12
+            s.siege[i] = 3
+            s.fort[i] = 2
+        }
+    }
+    s.settlement[5] = 2
+    s.settlement[1] = 1
+    s.settlement[11] = 1
+    s.owner[7] = 2
+    s.owner[8] = 2
+    s.troops[7] = 12
+    s.fort[7] = 2
+    s.gold[1] = 6
+    s.food[1] = 2
+    // One remaining order cannot move these heavy detachments. This fixture
+    // compares an affordable food investment with real alternatives, not a
+    // sacrificial attack that would also reduce both threat and upkeep.
+    s.orders = 1
+    s
+}
+#[test]
+fn both_policies_build_granary_for_sustained_food_support() {
+    let s = hungry_town_position()
+    assert(economy(s, 1).shortage > 2)
+    let granary = Action { kind: 11, from: 5, to: 5, amount: 1 }
+    let arsenal = Action { kind: 11, from: 5, to: 5, amount: 2 }
+    assert(is_legal(s, granary) && is_legal(s, arsenal))
+    assert(evaluate(apply(s, granary), 1) > evaluate(apply(s, arsenal), 1))
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let action = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        assert(same_action(action, granary))
+        assert(economy(apply(s, action), 1).food_production == economy(s, 1).food_production + 2)
+    }
+    // Construction consumes two food, so its first extra harvest merely pays
+    // that back. Only the following harvest reduces this fixture's losses.
+    var ordinary = apply(s, pass())
+    var improved = apply(s, granary)
+    ordinary.side = 1
+    improved.side = 1
+    ordinary = begin_turn(ordinary)
+    improved = begin_turn(improved)
+    assert(total_army(ordinary, 1) == total_army(improved, 1))
+    ordinary = begin_turn(ordinary)
+    improved = begin_turn(improved)
+    assert(total_army(improved, 1) == total_army(ordinary, 1) + 2)
+}
+#[test]
+fn specialty_value_depends_on_supply_and_legal_trace_replays() {
+    var s = initial(0)
+    s.settlement[5] = 2
+    let base = evaluate(s, 1)
+    s.specialty[5] = 2
+    assert(evaluate(s, 1) > base)
+    s.owner[0] = 2
+    let disconnected = evaluate(s, 1)
+    s.specialty[5] = 0
+    assert(evaluate(s, 1) == disconnected)
+    // A fully legal initial-state trace: upgrade, end both turns, fortify,
+    // end both turns again, then specialize. No state edit is part of replay.
+    let trace = [Action { kind: 4, from: 5, to: 5, amount: 2 }, pass(), pass(),
+        Action { kind: 3, from: 5, to: 5, amount: 1 }, pass(), pass(),
+        Action { kind: 11, from: 5, to: 5, amount: 2 }]
+    s = initial(0)
+    var replay = initial(0)
+    for i in 0 .. 7 {
+        assert(is_legal(s, trace[i]))
+        s = apply(s, trace[i])
+        replay = apply(replay, trace[i])
+        assert(same_campaign(s, replay))
+        check_bounds(s)
+    }
+    assert(s.specialty[5] == 2 && s.result == 0)
 }

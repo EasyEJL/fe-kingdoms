@@ -194,6 +194,49 @@ class AdapterTests(unittest.TestCase):
                 self.assertEqual(preview[color+'CutOffAfter'],after['supply'][side-1]['cutOffOwned'])
         self.assertGreater(captures,0,'The full win must exercise a river bridge capture.')
 
+    def test_town_specialty_forecasts_and_permanent_choice(self):
+        def at(actions):
+            return game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=actions))
+        trace=[[4,5,5,2],[1,0,5,3],[0,0,0,0],[1,0,1,1],[0,0,0,0],[0,0,0,0]]
+        before=at(trace)
+        self.assertEqual((before['tiles'][5]['settlement'],before['tiles'][5]['supplied']),(2,1))
+        for specialty in (1,2):
+            action=[11,5,5,specialty]
+            self.assertIn(action,before['legal'])
+            preview=before['previews'][before['legal'].index(action)]
+            after=at(trace+[action])
+            self.assertEqual((preview['outcome'],preview['cost'],preview['foodCost'],preview['orderCost']),(7,6,2,1))
+            self.assertEqual(preview['targetSpecialty'],specialty)
+            for key,field in (('targetSpecialty','specialty'),('targetTerrain','terrain'),('targetPassable','passable'),('settlementAfter','settlement')):
+                self.assertEqual(preview[key],after['tiles'][5][field])
+            self.assertEqual(preview['cost'],before['state']['gold1']-after['state']['gold1'])
+            self.assertEqual(preview['foodCost'],before['economy'][0]['food']-after['economy'][0]['food'])
+            self.assertEqual(preview['nextOrders'],after['state']['orders'])
+            self.assertEqual(after['tiles'][5]['specialty'],specialty)
+            self.assertFalse(any(a[0]==11 and a[1]==5 for a in after['legal']))
+            for replacement in (1,2):
+                with self.assertRaises(ValueError):at(trace+[action,[11,5,5,replacement]])
+            red=at(trace+[action,[0,0,0,0]])
+            next_turn=at(trace+[action,[0,0,0,0],[0,0,0,0]])
+            self.assertEqual(red['economy'][0]['projectedFood'],next_turn['economy'][0]['food'])
+            self.assertEqual(next_turn['tiles'][5]['specialty'],specialty)
+            if specialty==1:
+                self.assertEqual(after['economy'][0]['foodProduction'],before['economy'][0]['foodProduction']+2)
+            else:
+                ordinary=at(trace+[[3,0,0,1],[0,0,0,0],[0,0,0,0]])
+                for kind in (5,6,7,8):
+                    unit=[kind,5,5,1]
+                    standard=ordinary['previews'][ordinary['legal'].index(unit)]
+                    discount=next_turn['previews'][next_turn['legal'].index(unit)]
+                    self.assertEqual(discount['cost'],standard['cost']-1)
+                    self.assertEqual(discount['foodCost'],standard['foodCost'])
+                    applied=at(trace+[action,[0,0,0,0],[0,0,0,0],unit])
+                    self.assertEqual(discount['cost'],next_turn['state']['gold1']-applied['state']['gold1'])
+                    self.assertEqual(discount['targetSpecialty'],applied['tiles'][5]['specialty'])
+        self.assertFalse(any(a[0]==11 for a in at([])['legal']))
+        for illegal in ([11,5,0,1],[11,5,5,3],[11,0,0,1]):
+            with self.assertRaises(ValueError):at(trace+[illegal])
+
     def test_legacy_replay_readonly(self):
         for version,winner in ((1,1),(2,2),(3,1),(4,1),(5,1),(6,1)):
             filename=f'legacy-v{version}-win.json' if version<6 else 'current-v6-win.json'
@@ -203,6 +246,26 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(legacy['map']['topology'],0 if version==1 else 1)
             self.assertEqual(legacy['state']['result'],winner)
             with self.assertRaises(ValueError): game(dict(fixture,mode=0))
+
+    def test_captured_town_keeps_native_specialty_forecast(self):
+        # Both sides advance through the forests, then Red captures Blue's
+        # newly specialized town. Every setup order is replayed by native Fe.
+        setup=[[1,0,1,5],[1,1,6,7],[1,14,13,5],[1,13,8,7],
+               [4,6,6,2],[1,6,5,4],[1,8,7,4],[2,8,8,2]]
+        for specialty in (1,2):
+            trace=setup+[[11,6,6,specialty],[0,0,0,0],[1,8,7,2]]
+            before=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=trace))
+            self.assertEqual((before['tiles'][6]['owner'],before['tiles'][6]['specialty']),(1,specialty))
+            action=[1,7,6,3]
+            preview=before['previews'][before['legal'].index(action)]
+            after=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=trace+[action]))
+            self.assertEqual((preview['outcome'],preview['targetOwner'],preview['targetSpecialty']),(2,2,specialty))
+            self.assertEqual((after['tiles'][6]['owner'],after['tiles'][6]['specialty']),(2,specialty))
+            self.assertEqual(preview['targetTroops'],after['tiles'][6]['troops'])
+            self.assertEqual(preview['settlementAfter'],after['tiles'][6]['settlement'])
+            for side,color in enumerate(('blue','red')):
+                self.assertEqual(preview[color+'ConnectedAfter'],after['supply'][side]['connectedOwned'])
+                self.assertEqual(preview[color+'CutOffAfter'],after['supply'][side]['cutOffOwned'])
 
     def test_campaign_sizes_and_economy(self):
         for scenario,count,width,height in ((0,15,5,3),(1,35,7,5),(2,45,9,5)):

@@ -186,3 +186,7 @@ For focused v6 examples, read `fixed_rivers_bridges_and_cached_capital_routes_ma
 Read move_order_cost and order_cost after detachment. The actual moving composition determines cost: any siege spends both orders, otherwise cavalry entering forest spends both, otherwise one. This means a half move that leaves the specialist home can remain cheap. legal filters unaffordable order costs; apply deducts exactly the same value. Native forecasts expose orderCost and total tile defense rather than asking JavaScript to reproduce the rule.
 
 Hard still searches four action plies, not four order points. Expensive moves change which turns fit inside that horizon. Tests and playtesting must evaluate that behavior rather than treating the depth number as unchanged strength.
+
+## V7 stage 2: one town choice, shared prices
+
+A specialty is tile state, not ownership state. Capture changes ownership without erasing the choice. Granary production reads the same connected-supply map as the rest of economy. Arsenal pricing is shared by legal, apply and forecasts, so paid training and recruitment agree. Look for kind11 and the specialty price helper; the adapter only exposes Fe's chosen state and costs. A town cannot switch its specialty later.

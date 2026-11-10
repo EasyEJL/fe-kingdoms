@@ -30,7 +30,7 @@ def match(name,levels,scenario=0,max_actions=24):
     status='completed' if data['state']['result'] else 'paused'
     reason='game_result' if status=='completed' else 'round_decision' if data['state']['decisionPending'] else 'trace_capacity' if data['state']['traceCapacityReached'] else 'test_action_budget'
     (E/(name+'.json')).write_text(json.dumps({'version':CURRENT_VERSION,'scenario':scenario,'difficulty':levels[1],'actions':actions},indent=2))
-    result={'name':name,'scenario':scenario,'levels':levels,'status':status,'stop_reason':reason,'result':data['state']['result'],'turn':data['state']['turn'],'actions':len(actions),'specialist_orders':sum(5<=a[0]<=8 for a in actions),'seconds':sum(durations),'max_action_seconds':max(durations,default=0),'replay_exact':True,'decisions':turns}
+    result={'name':name,'scenario':scenario,'levels':levels,'status':status,'stop_reason':reason,'result':data['state']['result'],'turn':data['state']['turn'],'actions':len(actions),'specialist_orders':sum(5<=a[0]<=8 for a in actions),'specialty_orders':sum(a[0]==11 for a in actions),'seconds':sum(durations),'max_action_seconds':max(durations,default=0),'replay_exact':True,'decisions':turns}
     (E/(name+'-result.json')).write_text(json.dumps(result,indent=2))
     print(json.dumps({k:v for k,v in result.items() if k!='decisions'}),flush=True)
     return result

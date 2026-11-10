@@ -249,6 +249,38 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  assert.equal(orderButtons(openCards()[0]).length,1);before=fetches;await run('perform('+JSON.stringify(heavy)+','+JSON.stringify(heavyPreview)+')');assert.equal(fetches,before);
  // Frozen v6 never receives forest-specific terrain or order-cost semantics.
  setGame({...v6,state:{...start.state,side:2}});assert.doesNotMatch(get('terrain-guide').textContent,/Forest|siege uses 2/);assert.doesNotMatch(run('forecast('+JSON.stringify(heavy)+','+JSON.stringify(heavyPreview)+')'),/Order cost/);
+ // A supplied town offers only the permanent choices listed by Fe, with native prices.
+ const granary=[11,5,5,1],arsenal=[11,5,5,2];
+ const granaryPreview={...preview,index:1,outcome:7,cost:6,foodCost:2,orderCost:1,targetSpecialty:1};
+ const arsenalPreview={...granaryPreview,index:2,targetSpecialty:2};
+ const town={...start,tiles:start.tiles.map(t=>t.index===5?{...t,settlement:2,specialty:0}:t),legal:[pass,granary,arsenal],previews:[{outcome:0},granaryPreview,arsenalPreview]};
+ setGame(town);run('selected=5;render()');let townButtons=orderButtons(openCards()[0]);
+ assert.equal(townButtons.length,2);assert.match(townButtons[0].children[0].textContent,/Specialize A2 as Granary \(permanent choice\).*1 order/);
+ assert.match(townButtons[1].children[0].textContent,/Arsenal \(permanent choice\)/);
+ assert.match(townButtons[0].children[1].textContent,/6 gold, 2 food.*Granary.*cannot replace.*\+2 food production.*while supplied.*Capture preserves/);
+ assert.match(townButtons[1].children[1].textContent,/Arsenal.*Cavalry\/siege recruitment and paid training cost 1 less gold while supplied/);
+ assert.match(run('forecast('+JSON.stringify(granary)+','+JSON.stringify({...granaryPreview,cost:13,foodCost:9,targetSpecialty:2})+')'),/13 gold, 9 food.*Arsenal/);
+ // Double-clicking records one paid choice. No replacement button appears unless Fe offers one.
+ const granaryTown={...town,state:{...town.state,orders:1},tiles:town.tiles.map(t=>t.index===5?{...t,specialty:1}:t),actions:[granary],legal:[pass],previews:[{outcome:0}],economy:[{...start.economy[0],foodProduction:19,foodNet:16}]};
+ before=fetches;reply(granaryTown);const chosen=townButtons[0],specializing=chosen.onclick();await chosen.onclick();await specializing;
+ assert.equal(fetches,before+1);assert.equal(requests.at(-1).mode,1);assert.deepEqual(requests.at(-1).actions,[granary]);assert.equal(orderButtons(openCards()[0]).length,0);
+ assert.match(get('human-activity').textContent,/Specialized.*Granary.*Used 1 order/);assert.match(get('economy').children[0].textContent,/19 food produced/);
+ assert.match(get('board').children[5].attrs['aria-label'],/Granary \(permanent\)/);assert.match(get('board').children[5].children[0].children[2].textContent,/Town \/ Granary/);
+ assert.match(openCards()[0].children[0].textContent,/Granary/);assert.equal(openCards()[0].children[0].children[0].className,'specialty-icon');
+ const granaryArt=get('board').children[5].children[0].children[2].children[0].innerHTML;
+ // Arsenal's base-price explanation does not replace Fe's actual local recruit or training quote.
+ const arsenalTown={...town,tiles:town.tiles.map(t=>t.index===5?{...t,specialty:2}:t),legal:[pass,[5,5,5,1],[8,5,5,1]],previews:[{outcome:0},{...preview,cost:2,foodCost:7,orderCost:1},{...preview,cost:3,foodCost:8,orderCost:1}]};
+ setGame(arsenalTown);run('selected=5;render()');townButtons=orderButtons(openCards()[0]);
+ assert.match(townButtons[0].children[1].textContent,/2 gold, 7 food/);assert.match(townButtons[1].children[1].textContent,/3 gold, 8 food/);
+ assert.match(get('territory-detail').textContent,/Arsenal.*Cavalry\/siege recruitment and paid training cost 1 less gold/);
+ assert.notEqual(get('board').children[5].children[0].children[2].children[0].innerHTML,granaryArt);
+ const baseGuide=openCards()[0].children[1].children.find(e=>e.className==='role-comparison').children[1];
+ assert.match(baseGuide.children[1].children[1].children[0].textContent,/Cavalry.*base: 1 for 4 gold/);assert.match(baseGuide.children[3].textContent,/Base prices above are not local quotes.*Fe forecast for actual prices/);
+ // Cut-off and captured towns retain the choice; the UI neither invents income nor grants actions.
+ setGame({...granaryTown,tiles:granaryTown.tiles.map(t=>t.index===5?{...t,supplied:0}:t),economy:[{...start.economy[0],foodProduction:3}]});run('selected=5;render()');
+ assert.match(get('territory-detail').textContent,/Granary.*Benefit inactive: town is cut off/);assert.match(get('economy').children[0].textContent,/3 food produced/);assert.equal(orderButtons(openCards()[0]).length,0);
+ setGame({...arsenalTown,tiles:arsenalTown.tiles.map(t=>t.index===5?{...t,owner:2}:t),legal:[pass],previews:[{outcome:0}]});run('selected=5;render()');
+ assert.match(get('board').children[5].attrs['aria-label'],/Red.*Arsenal/);assert.match(get('territory-detail').textContent,/Capture preserves this choice/);assert.equal(openCards().length,0);
  const old={...start};delete old.previews;setGame(old);run('selected=0;render()');assert.doesNotThrow(()=>run('render()'));assert.equal(run('busy'),false);
  assert.match(orderButtons(openCards()[0])[0].children[0].textContent,/Check Fe order cost/);assert.doesNotMatch(orderButtons(openCards()[0])[0].children[0].textContent,/1 order/);
  console.log('UI unit tests passed: v7 forest art, native defense/detachments/order costs, explicit turns, one-open territory hierarchy, accessible role badges and zoom, supply/campaign forecasts, and isolated v1..v7 replay checkpoints. Mocked DOM/transport, not browser or human playtesting.');

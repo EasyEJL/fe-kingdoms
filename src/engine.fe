@@ -16,6 +16,7 @@ struct State {
     siege: [i64; 64],
     fort: [i64; 64],
     settlement: [i64; 64],
+    specialty: [i64; 64],
     gold: [i64; 3],
     food: [i64; 3],
     scenario: usize,
@@ -57,6 +58,12 @@ fn unit_profile(_ role: i64) -> UnitProfile {
     if role == 0 { UnitProfile { recruit_gold: 3, recruit_food: 2, recruit_count: 2, open_attack_bonus: 0, fortified_attack_bonus: 0 } }
     else if role == 1 { UnitProfile { recruit_gold: 4, recruit_food: 2, recruit_count: 1, open_attack_bonus: 1, fortified_attack_bonus: 0 } }
     else { UnitProfile { recruit_gold: 5, recruit_food: 3, recruit_count: 1, open_attack_bonus: 0, fortified_attack_bonus: 2 } }
+}
+// Legality supplies the connection flag from its existing supply traversal.
+// apply() calls this only for a validated, supplied recruitment/training order.
+fn recruitment_gold(_ s: State, _ tile: usize, _ role: i64, _ supplied: bool) -> i64 {
+    unit_profile(role).recruit_gold -
+        if supplied && role > 0 && s.settlement[tile] == 2 && s.specialty[tile] == 2 { 1 } else { 0 }
 }
 struct Economy {
     gold_income: i64,
@@ -273,7 +280,7 @@ fn order_cost(_ s: State, _ action: Action) -> i64 {
 fn initial(_ scenario: usize) -> State {
     assert(scenario <= 2)
     var s = State {
-        owner: [0; 64], troops: [0; 64], cavalry: [0; 64], siege: [0; 64], fort: [0; 64], settlement: [0; 64],
+        owner: [0; 64], troops: [0; 64], cavalry: [0; 64], siege: [0; 64], fort: [0; 64], settlement: [0; 64], specialty: [0; 64],
         gold: [0, 8, 8], food: [0, 12, 12], scenario,
         side: 1, orders: 2, turn: 1, result: 0, passes: 0,
         completed_rounds: 0, round_limit: base_round_limit(scenario), decision_pending: false,
@@ -347,6 +354,7 @@ fn economy_with_supply(_ s: State, _ side: i64, _ connected: [bool; 64]) -> Econ
             if connected[i] {
                 result.gold_income += s.settlement[i]
                 if terrain(s, i) == 1 { result.food_production += 2 }
+                if s.specialty[i] == 1 { result.food_production += 2 }
                 result.food_upkeep += army_upkeep(s.troops[i])
             } else { result.disconnected += 1 }
         }
@@ -422,20 +430,20 @@ fn legal(_ s: State) -> Actions {
                         add(Action { kind: 2, from: i, to: i, amount: 2 })
                     }
                     if s.settlement[i] == 2 && s.troops[i] < MAX_TROOPS {
-                        if s.gold[player] >= unit_profile(1).recruit_gold && s.food[player] >= unit_profile(1).recruit_food {
+                        if s.gold[player] >= recruitment_gold(s, i, 1, true) && s.food[player] >= unit_profile(1).recruit_food {
                             add(Action { kind: 5, from: i, to: i, amount: 1 })
                         }
-                        if s.gold[player] >= unit_profile(2).recruit_gold && s.food[player] >= unit_profile(2).recruit_food {
+                        if s.gold[player] >= recruitment_gold(s, i, 2, true) && s.food[player] >= unit_profile(2).recruit_food {
                             add(Action { kind: 6, from: i, to: i, amount: 1 })
                         }
                     }
                     // Training is an explicit paid conversion, useful at the stack cap.
                     // It never happens implicitly during movement or friendly merging.
                     if s.settlement[i] == 2 && army_at(s, i).infantry > 0 {
-                        if s.gold[player] >= unit_profile(1).recruit_gold && s.food[player] >= unit_profile(1).recruit_food {
+                        if s.gold[player] >= recruitment_gold(s, i, 1, true) && s.food[player] >= unit_profile(1).recruit_food {
                             add(Action { kind: 7, from: i, to: i, amount: 1 })
                         }
-                        if s.gold[player] >= unit_profile(2).recruit_gold && s.food[player] >= unit_profile(2).recruit_food {
+                        if s.gold[player] >= recruitment_gold(s, i, 2, true) && s.food[player] >= unit_profile(2).recruit_food {
                             add(Action { kind: 8, from: i, to: i, amount: 1 })
                         }
                     }
@@ -445,6 +453,10 @@ fn legal(_ s: State) -> Actions {
                     if terrain(s, i) != 4 && s.settlement[i] < 2
                         && s.gold[player] >= settlement_cost(s.settlement[i] + 1) {
                         add(Action { kind: 4, from: i, to: i, amount: s.settlement[i] + 1 })
+                    }
+                    if s.settlement[i] == 2 && s.specialty[i] == 0 && s.gold[player] >= 6 && s.food[player] >= 2 {
+                        add(Action { kind: 11, from: i, to: i, amount: 1 })
+                        add(Action { kind: 11, from: i, to: i, amount: 2 })
                     }
                 }
                 if s.troops[i] > 1 {
@@ -522,11 +534,15 @@ fn apply(_ before: State, _ action: Action) -> State {
         } else if action.kind >= 5 && action.kind <= 8 {
             let cavalry = action.kind == 5 || action.kind == 7
             let profile = unit_profile(if cavalry { 1 } else { 2 })
-            s.gold[player] -= profile.recruit_gold
+            s.gold[player] -= recruitment_gold(s, action.from, if cavalry { 1 } else { 2 }, true)
             s.food[player] -= profile.recruit_food
             if action.kind < 7 { s.troops[action.from] += profile.recruit_count }
             if cavalry { s.cavalry[action.from] += 1 }
             else { s.siege[action.from] += 1 }
+        } else if action.kind == 11 {
+            s.gold[player] -= 6
+            s.food[player] -= 2
+            s.specialty[action.from] = action.amount
         } else {
             let moving = detachment(army_at(s, action.from), action.amount)
             let garrison = subtract_armies(army_at(s, action.from), moving)
@@ -599,6 +615,10 @@ fn evaluate_cached(_ s: State, _ root: i64) -> i64 uses (routes: Navigation) {
             if connected {
                 score += sign * (10 + s.settlement[i] * 18)
                 if terrain(s, i) == 1 { score += sign * 26 }
+                // Modest infrastructure value complements actual food balance;
+                // disconnected specialties provide no operational benefit.
+                if s.specialty[i] == 1 { score += sign * 8 }
+                if s.specialty[i] == 2 { score += sign * 18 }
             } else { score -= sign * (16 + s.troops[i] * 2) }
             var nearby_siege_target = false
             for direction in 0 .. 6 {
@@ -611,6 +631,7 @@ fn evaluate_cached(_ s: State, _ root: i64) -> i64 uses (routes: Navigation) {
             // Reward a useful siege train at a real defended frontier, but cap the
             // purpose bonus so the opponent does not blindly buy siege-only armies.
             if nearby_siege_target { score += sign * imin(s.siege[i], 3) * 20 }
+            if connected && nearby_siege_target && s.specialty[i] == 2 { score += sign * 6 }
             if terrain(s, i) == 7 || terrain(s, i) == 9 { score += sign * 18 }
             if s.troops[i] > 1 { score += sign * ((span - distance) * s.troops[i]) }
             if adjacent(s, i, enemy_capital) {

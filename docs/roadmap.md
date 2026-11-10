@@ -36,3 +36,5 @@ Keep this project separate from Dragonstales, the preserved transition prototype
 ## Authorized frontier development (unreleased v7)
 
 Forest and actual-detachment movement costs are the first implementation stage. Town specialties (granary/arsenal), bounded permanent shared crossing construction and truthful Fe opponent evaluation/strategy feedback are authorized next stages, not completed features yet. Use existing gold/food and small factual profiles, not a generic framework. Destructible bridges, forest harvesting, roads and an Expert tier remain future candidates. Expert might use measured iterative deepening, tactical extensions and caching after mechanics settle; no guaranteed wins are implied.
+
+V7 stage2 now implements Granary/Arsenal as the permanent bounded town choice described in ADR0012; bridge construction and opponent feedback remain the next stages.

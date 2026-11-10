@@ -37,3 +37,4 @@ Add an ADR for a meaningful architectural or rules decision, not every implement
 - [V6 capital-threat audit](tactical-review-v6.md): bounded native evidence for two-order defense, with Easy/Hard differences and limits.
 
 - [ADR 0011: Forest and composition-based order costs](adr/0011-frontier-forest-movement.md).
+- [ADR 0012: Permanent town specialties](adr/0012-town-specialties.md).
