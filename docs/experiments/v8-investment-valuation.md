@@ -32,7 +32,7 @@ No additional BFS, legal-action enumeration or search is called from evaluation.
 
 Focused Fe coverage includes low-stock versus capped/no-demand states; discovery-independent demand; food-limited throughput; supply loss; absent prerequisite infrastructure; removing Rotation double-counting under normal and food focus; additive decision sums; pure evaluation with unchanged transitions; and preservation of capital wins, necessary defense and supply-cut tactics. The original A purchase-score assertion is explicitly replaced with `before - 12 + measured estimate`, preserving the actual liquid-resource expense rather than weakening payment tests.
 
-Final focused B run: **69 Fe tests passed**, including the regression for enemy Rotation under root food focus and a mirrored-state check across all eight discovery masks and four bridge masks. The latter checks both seats and equal-demand recruitment-site tie handling. An initial cancellation error applied the root-only extra three points to the enemy too; parent review identified it, it was corrected, and both tests and native measurements were rerun. Unit fixtures do not establish campaign strength or human enjoyment.
+Final focused B run: **69 Fe tests passed**, including the regression for enemy Rotation under root food focus and a mirrored-state check across all eight discovery masks and four bridge masks. The latter checks both seats and equal-demand recruitment-site tie handling. An initial cancellation error applied the root-only extra three points to the enemy too; code review identified it, it was corrected, and both tests and native measurements were rerun. Unit fixtures do not establish campaign strength or human enjoyment.
 
 ## Measured native checks
 
