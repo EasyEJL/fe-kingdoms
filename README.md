@@ -1,12 +1,12 @@
 # Fe Kingdoms
 
-A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. This branch is an **unreleased rules version 8 experiment: kingdom development**. The browser and Python adapter only display and transport Fe results.
+A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current local preview is **rules version 8: kingdom development**. The browser and Python adapter only display and transport Fe results.
 
 ## Isolated kingdom-development experiment
 
-The reviewed v7 save/practice milestone remains unchanged on port 8769. This kingdom-charters branch is developed in `C:\Users\Eric\dev\fe-kingdoms-charters`, with a future isolated preview reserved at http://localhost:8770. Do not treat intermediate v8 saves as a stable release format. It does not replace active games on ports 8765 through 8769. Run `scripts/preview.ps1` from this checkout to start or locate that separate preview. Do not use the ordinary launcher to switch the live game during a match.
+The reviewed v7 save/practice milestone remains unchanged on port 8769. This kingdom-charters branch is developed in `C:\Users\Eric\dev\fe-kingdoms-charters`, with its isolated preview at http://localhost:8770. V8 rules and prices are preserved for replay; later physical changes require a new version. It does not replace active games on ports 8765 through 8769. Run `launch.ps1` or `scripts/preview.ps1` from this checkout to start or locate that separate preview. Both use only port 8770 and leave older servers running.
 
-Browser saves are separate for each port. To copy a current game into the preview, use **Save replay** in the original game and **Load replay** in the preview. The original checkpoint remains untouched. New games use experimental v8. Existing v1-v7 matches remain exact read-only replays; they are never silently converted.
+Browser saves are separate for each port. To copy a current game into the preview, use **Save replay** in the original game and **Load replay** in the preview. The original checkpoint remains untouched. New games use v8. Existing v1-v7 matches remain exact read-only replays; they are never silently converted.
 
 ## Play and verify
 
@@ -17,7 +17,7 @@ Set-Location C:\Users\Eric\dev\fe-kingdoms-charters
 .\scripts\preview.ps1
 ```
 
-Open the URL reported by the preview launcher. Existing instances on 8765 and 8766 remain on their reviewed versions while this checkout is tested.
+Open the URL reported by the preview launcher. Existing instances on ports 8765 through 8769 remain unchanged.
 
 Run all automated checks with `scripts/verify.ps1`. It uses local Node for UI unit tests and the pinned offline Fe/Python Docker image. Results and exact replays are regenerated under ignored `evidence/`; a test result must say `passed`, not `running` or `failed`.
 
@@ -57,9 +57,11 @@ Research is one order and is available only where Fe lists it under an owned, su
 
 Knowledge is permanent for the kingdom and does not transfer when a town is captured. Infrastructure and supply still matter: their loss suspends the benefit. A second specialized town is needed to support both branches. No combat bonus, research timer or new currency is introduced. Fe reports the exact prerequisites, canonical research town, current eligibility and resulting economy; the browser only displays those results.
 
+The default opponent retains the A evaluator. A more complex investment estimate was tested in matched ten-round model games but did not demonstrate an improvement; it remains on local branch `experiment/v8-investment`. Neither tested Red policy researched in those samples. Expect immediate army/territory priorities rather than a fully calibrated long-term economy planner. All rules and resources remain identical for the human and computer.
+
 ## Saves and compatibility
 
-Save replay exports the accepted action sequence, version, scenario and difficulty. Up to 2,048 actions are supported, including campaign decisions. At capacity, play pauses for export without declaring a draw; export does not itself increase this version's capacity. Fe validates every recorded action when loading. Version-1 square saves, version-2 basic-hex saves, version-3 infantry-campaign saves and version-4 mixed-army saves, version-5 continuation saves version-6 river saves and version-7 frontier saves load through frozen engines **read-only**. They are never silently migrated. Each rules version has a separate browser checkpoint; loading an old replay does not replace the current one. Export replays to keep multiple games.
+Save replay exports the accepted action sequence, version, scenario and difficulty. Up to 2,048 actions are supported, including campaign decisions. At capacity, play pauses for export without declaring a draw; export does not itself increase this version's capacity. Fe validates every recorded action when loading. Version-1 square saves, version-2 basic-hex saves, version-3 infantry-campaign saves and version-4 mixed-army saves, version-5 continuation saves, version-6 river saves and version-7 frontier saves load through frozen engines **read-only**. They are never silently migrated. Each rules version has a separate browser checkpoint; loading an old replay does not replace the current one. Export replays to keep multiple games.
 
 ### Named campaign snapshots
 

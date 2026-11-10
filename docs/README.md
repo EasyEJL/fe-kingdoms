@@ -54,3 +54,5 @@ Add an ADR for a meaningful architectural or rules decision, not every implement
 - [V8 conditional investment valuation](experiments/v8-investment-valuation.md): the actual B formula, A baseline, compatibility checks and limited measured decisions.
 
 - [Matched v8 A/B playtest](playtests/v8-ab-results.md): four ten-round model continuations, resource accounting and why no improvement is established.
+
+- [ADR 0018: Retain the baseline opponent](adr/0018-retain-baseline-opponent.md): conservative default after the exploratory A/B, with B preserved.

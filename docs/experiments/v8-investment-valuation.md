@@ -1,5 +1,7 @@
 # V8 conditional investment valuation, policy B
 
+B is retained on local branch `experiment/v8-investment`; it is not the default preview opponent. See ADR0018 and the paired playtest report.
+
 ## Scope and baseline
 
 A is commit `4a0d8a2d476eb6dde88ee9e35b2f75f89dd55c73`, preserved locally at `evidence/ab/kingdom-a` with SHA256 `d93c5d1b74873b9c51120ba79378b5634e51bb66af9df5f1d6e255685d83aaa0`. B changes evaluation only. Legal actions, physical transitions, initial states, protocol and replay rules remain identical. Neither policy's recorded actions are regenerated when comparing a replay. This is an experiment, not a strength improvement claim.

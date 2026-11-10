@@ -2,7 +2,7 @@
 import hashlib,json,pathlib,subprocess,sys,time
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 E=ROOT/'evidence';E.mkdir(exist_ok=True)
-commands=[['python3','scripts/build.py'],['python3','scripts/test_fe.py'],['python3','scripts/test_tactics.py'],['python3','scripts/test_matches.py'],['python3','tests/test_http.py'],['python3','tests/test_decisions.py'],['python3','tests/test_campaign.py'],['python3','tests/test_playtest_replays.py'],['python3','tests/test_v7_replays.py'],['python3','tests/test_developments.py'],['python3','tests/test_practice.py'],['python3','scripts/test_http_match.py']]
+commands=[['python3','scripts/build.py'],['python3','scripts/test_fe.py'],['python3','scripts/test_tactics.py'],['python3','scripts/test_matches.py'],['python3','tests/test_http.py'],['python3','tests/test_decisions.py'],['python3','tests/test_campaign.py'],['python3','tests/test_playtest_replays.py'],['python3','tests/test_v7_replays.py'],['python3','tests/test_v8_playtest_replays.py'],['python3','tests/test_developments.py'],['python3','tests/test_practice.py'],['python3','scripts/test_http_match.py']]
 results=[]
 summary={'status':'running','checks':results}
 (E/'verification.json').write_text(json.dumps(summary,indent=2))
@@ -23,6 +23,10 @@ for p in list((ROOT/'tests/fixtures').glob('*.json')) + [p for v in (6,7) for p 
 for version in (6,7):
     for name in ('small','medium'):
         fixture=f'docs/playtests/v{version}-sol-{name}.json'
+        summary['sha256'][fixture]=hashlib.sha256((ROOT/fixture).read_bytes()).hexdigest()
+for size in ('medium','large'):
+    for policy in ('a','b'):
+        fixture=f'docs/playtests/v8-ab-{size}-{policy}.json'
         summary['sha256'][fixture]=hashlib.sha256((ROOT/fixture).read_bytes()).hexdigest()
 summary['browser_verification']='not run by this automated suite'
 summary['human_playtest']=False
