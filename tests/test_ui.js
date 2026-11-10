@@ -309,7 +309,35 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  // Occupation and later capture keep the constructed marker; native ownership/defense/supply win.
  for(const owner of [1,2]){setGame({...bridgeMap,tiles:bridgeMap.tiles.map(t=>t.index===2?{...t,owner,troops:1,infantry:1,defense:33,supplied:1}:t)});run('selected=2;render()');assert.match(get('board').children[2].attrs['aria-label'],new RegExp('Built bridge, '+(owner===1?'Blue':'Red')+'.*defense 33 from Fe'));assert.match(get('territory-detail').textContent,/Defense: 33 \(Fe\)/);assert.doesNotMatch(get('territory-detail').textContent,/Empty: move/);assert.equal(openCards().length,owner===1?1:0);}
  assert.doesNotMatch(html,/Every territory retains at least one troop/);assert.match(html,/Every departing army retains at least one garrison/);
+ // Native decisions describe only actual automatic orders, with immediate changes kept distinct from search.
+ const aiFortify=[3,9,9,1],decision1={traceIndex:2,side:2,kind:ai[0],from:ai[1],to:ai[2],amount:ai[3],focus:1,target:14,depth:4,nodes:127,searchScore:99,beforeScore:42,afterScore:36,materialDelta:4,resourcesDelta:-10,supplyDelta:0,economyDelta:0,positionDelta:0,pressureDelta:0,focusDelta:0,terminalDelta:0,highlight:1,orderCost:1};
+ const decision2={...decision1,traceIndex:3,kind:aiFortify[0],amount:1,focus:3,target:64,nodes:55,searchScore:81,beforeScore:36,afterScore:34,materialDelta:0,resourcesDelta:0,positionDelta:-2,highlight:0};
+ const decisionResponse={...next,difficulty:1,actions:[recruit,move,ai,aiFortify],decisions:[decision1,decision2]};
+ setGame(second);reply(decisionResponse);before=fetches;await get('global-actions').children[0].onclick();
+ assert.equal(fetches,before+1);assert.equal(requests.at(-1).mode,0);assert.equal(get('search').children.length,2);assert.match(get('search').textContent,/Latest automatic response only/);
+ const firstDecision=get('search').children[0],secondDecision=get('search').children[1];
+ assert.match(firstDecision.children[0].textContent,/Red order 3: Fe priority: defend capital E3.*Immediate evaluation change: 42 to 36/);
+ assert.match(firstDecision.children[1].textContent,/Actual order: Recruit \+2 infantry at E2.*Cost: 1 order/);
+ assert.match(firstDecision.children[2].textContent,/Largest positive component: material \+4.*resources -10/);
+ assert.match(firstDecision.children[3].textContent,/Configured action-ply limit: 4.*Per-decision search nodes: 127.*Chosen horizon score: 99.*not a full explanation.*or a promise of future orders/);
+ assert.match(secondDecision.children[0].textContent,/Red order 4.*food \(kingdom-wide\).*36 to 34/);assert.match(secondDecision.children[2].textContent,/No positive component.*position -2/);assert.match(secondDecision.children[3].textContent,/nodes: 55.*score: 81/);
+ assert.equal(run('focusLabel({focus:2,target:1})'),'reconnect holding B1');assert.equal(run('focusLabel({focus:4,target:14})'),'advance toward E3 (normal positional play)');
+ assert.match(firstDecision.children[0].textContent,/heuristic points/);assert.match(firstDecision.children[3].textContent,/not win probabilities/);assert.equal(firstDecision.attrs.open,undefined);assert.equal(secondDecision.attrs.open,undefined);
+ assert.equal(run('replay().decisions'),undefined);assert.deepEqual(JSON.parse(run('JSON.stringify(replay().actions)')),decisionResponse.actions);
+ // Prior-response, mismatched-action and invalid-index metadata cannot be assigned to a different order.
+ setGame(second);reply({...decisionResponse,decisions:[{...decision1,traceIndex:0,from:0,to:0},decision1,{...decision2,kind:2},{...decision2,traceIndex:99},decision2]});await get('global-actions').children[0].onclick();
+ assert.equal(get('search').children.length,2);assert.deepEqual(JSON.parse(run('JSON.stringify(game.decisions.map(d=>d.traceIndex))')),[2,3]);
+ setGame({...decisionResponse,decisions:[{...decision1,amount:99},{...decision2,traceIndex:-1}]});assert.equal(get('search').children.length,0);assert.match(get('search').textContent,/No search explanation/);
+ // Human requests and replay loads never retain automatic-response analysis, even if stale data is returned.
+ setGame(decisionResponse);reply({...decisionResponse,actions:[...decisionResponse.actions,recruit],state:{...start.state,orders:1}});await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');
+ assert.equal(requests.at(-1).mode,1);assert.equal(get('search').children.length,0);assert.equal(run('game.decisions.length'),0);assert.match(get('search').textContent,/replays store orders only/);
+ reply(decisionResponse);await run('load('+JSON.stringify(JSON.stringify({version:7,scenario:0,difficulty:1,actions:decisionResponse.actions}))+')');
+ assert.equal(requests.at(-1).mode,1);assert.equal(get('search').children.length,0);assert.equal(run('game.decisions.length'),0);assert.equal(run('replay().actions.length'),4);
+ setGame(decisionResponse);accept=true;reply({...start,decisions:[decision1,decision2]});await get('new').onclick();assert.equal(get('search').children.length,0);assert.equal(run('game.actions.length'),0);
+ // Frozen v6 does not acquire v7 decision metadata, and repeat renders do not duplicate details.
+ setGame({...decisionResponse,version:6});assert.equal(get('search').children.length,0);assert.doesNotMatch(get('search').textContent,/priority|explanation/);
+ setGame(decisionResponse);run('render();render()');assert.equal(get('search').children.length,2);
  const old={...start};delete old.previews;setGame(old);run('selected=0;render()');assert.doesNotThrow(()=>run('render()'));assert.equal(run('busy'),false);
  assert.match(orderButtons(openCards()[0])[0].children[0].textContent,/Check Fe order cost/);assert.doesNotMatch(orderButtons(openCards()[0])[0].children[0].textContent,/1 order/);
- console.log('UI unit tests passed: v7 forest art, native defense/detachments/order costs, explicit turns, one-open territory hierarchy, accessible role badges and zoom, supply/campaign forecasts, and isolated v1..v7 replay checkpoints. Mocked DOM/transport, not browser or human playtesting.');
+ console.log('UI unit tests passed: v7 terrain/crossings/specialties, native forecasts and fresh decision feedback, explicit turns, accessible territory hierarchy/zoom, campaign/supply and isolated v1..v7 checkpoints. Mocked DOM/transport, not browser or human playtesting.');
 })().catch(e=>{console.error(e);process.exitCode=1});

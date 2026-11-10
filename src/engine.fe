@@ -39,6 +39,19 @@ impl Copy for Action {}
 struct Actions { items: [Action; 1024], len: usize }
 impl Copy for Actions {}
 struct Search { nodes: i64 }
+struct Focus { kind: i64, target: usize }
+impl Copy for Focus {}
+// Components: material, resources, supply, economy, position, pressure,
+// current root focus, and terminal outcome. These sum to the actual score.
+struct Evaluation { parts: [i64; 8] }
+impl Copy for Evaluation {}
+struct Decision {
+    action: Action, side: i64, focus: Focus, depth: i64, nodes: i64,
+    search_score: i64, before_score: i64, after_score: i64,
+    deltas: [i64; 8], highlight: i64, order_cost: i64,
+}
+impl Copy for Decision {}
+struct DecisionHistory { items: [Decision; 2], trace_indices: [usize; 2], len: usize }
 // Two permanent construction sites give four bounded topology variants.
 // Every trial position selects its own mask, not the decision root's mask.
 struct Navigation { blue: [[i64; 64]; 4], red: [[i64; 64]; 4] }
@@ -623,17 +636,65 @@ fn apply(_ before: State, _ action: Action) -> State {
 }
 
 // OPPONENT EVALUATION AND BOUNDED SEARCH
+// These are potential direct attacks on the next opposing turn, not proof
+// that an opponent can force a win through a multi-order sequence.
+fn direct_capital_threats(_ s: State, _ root: i64) -> i64 {
+    let home = capital(s, root)
+    var threats: i64 = 0
+    for direction in 0 .. 6 {
+        let source = neighbor(s, home, direction)
+        if source < tile_count(s) && s.owner[source] == 3 - root && s.troops[source] > 1 {
+            let moving = detachment(army_at(s, source), s.troops[source] - 1)
+            if attack_power(s, home, moving) > defense(s, home) { threats += 1 }
+        }
+    }
+    threats
+}
+fn select_focus(_ s: State, _ root: i64) -> Focus {
+    if direct_capital_threats(s, root) > 0 { return Focus { kind: 1, target: capital(s, root) } }
+    let connected = supply(s, root)
+    var target: usize = MAX_TILES
+    var importance: i64 = -1
+    for index in 0 .. tile_count(s) {
+        let i = if root == 1 { index } else { tile_count(s) - 1 - index }
+        if s.owner[i] == root && !connected[i] {
+            let value = 24 + s.troops[i] * 12 + s.settlement[i] * 18 + if s.specialty[i] > 0 { 18 } else { 0 }
+            if value > importance { target = i
+                importance = value }
+        }
+    }
+    if target < MAX_TILES { return Focus { kind: 2, target } }
+    let budget = economy_with_supply(s, root, connected)
+    let player: usize = root.downcast_unchecked()
+    if budget.shortage > 0 || (budget.food_upkeep > budget.food_production && s.food[player] < budget.food_upkeep * 2) {
+        return Focus { kind: 3, target: MAX_TILES }
+    }
+    // Ordinary advancement already has positional and pressure weights.
+    // Keep its extra focus bonus zero to preserve the normal policy.
+    Focus { kind: 4, target: capital(s, 3 - root) }
+}
+fn evaluation_total(_ value: Evaluation) -> i64 {
+    var total: i64 = 0
+    for i in 0 .. 8 { total += value.parts[i] }
+    total
+}
 fn evaluate(_ s: State, _ root: i64) -> i64 {
     let routes = navigation(s)
     with (Navigation = routes) { evaluate_cached(s, root) }
 }
 fn evaluate_cached(_ s: State, _ root: i64) -> i64 uses (routes: Navigation) {
-    if s.result == root { return 100000 - s.turn }
-    if s.result == 3 - root { return -100000 + s.turn }
-    if s.result == 3 { return 0 }
+    evaluation_total(breakdown_cached(s, root, Focus { kind: 4, target: capital(s, 3 - root) }))
+}
+fn breakdown_cached(_ s: State, _ root: i64, _ focus: Focus) -> Evaluation uses (routes: Navigation) {
+    var parts = [0; 8]
+    if s.result != 0 {
+        if s.result == root { parts[7] = 100000 - s.turn }
+        else if s.result == 3 - root { parts[7] = -100000 + s.turn }
+        return Evaluation { parts }
+    }
     let player: usize = root.downcast_unchecked()
     let opponent: usize = (3 - root).downcast_unchecked()
-    var score = (s.gold[player] - s.gold[opponent]) * 2
+    parts[1] = (s.gold[player] - s.gold[opponent]) * 2
         + (s.food[player] - s.food[opponent]) * 2
     let own_supply = supply(s, root)
     let enemy_supply = supply(s, 3 - root)
@@ -644,16 +705,16 @@ fn evaluate_cached(_ s: State, _ root: i64) -> i64 uses (routes: Navigation) {
             let connected = if sign == 1 { own_supply[i] } else { enemy_supply[i] }
             let enemy_capital = capital(s, 3 - s.owner[i])
             let distance = if s.owner[i] == 1 { routes.red[s.bridge_mask][i] } else { routes.blue[s.bridge_mask][i] }
-            score += sign * (24 + s.troops[i] * 12 + s.fort[i] * 4 + s.cavalry[i] * 8 + s.siege[i] * 12)
-            if terrain(s, i) == 10 && army_at(s, i).infantry > 0 { score += sign * 4 }
+            parts[0] += sign * (24 + s.troops[i] * 12 + s.fort[i] * 4 + s.cavalry[i] * 8 + s.siege[i] * 12)
+            if terrain(s, i) == 10 && army_at(s, i).infantry > 0 { parts[0] += sign * 4 }
             if connected {
-                score += sign * (10 + s.settlement[i] * 18)
-                if terrain(s, i) == 1 { score += sign * 26 }
+                parts[2] += sign * (10 + s.settlement[i] * 18)
+                if terrain(s, i) == 1 { parts[3] += sign * 26 }
                 // Modest infrastructure value complements actual food balance;
                 // disconnected specialties provide no operational benefit.
-                if s.specialty[i] == 1 { score += sign * 8 }
-                if s.specialty[i] == 2 { score += sign * 18 }
-            } else { score -= sign * (16 + s.troops[i] * 2) }
+                if s.specialty[i] == 1 { parts[3] += sign * 8 }
+                if s.specialty[i] == 2 { parts[3] += sign * 18 }
+            } else { parts[2] -= sign * (16 + s.troops[i] * 2) }
             var nearby_siege_target = false
             for direction in 0 .. 6 {
                 let target = neighbor(s, i, direction)
@@ -664,16 +725,16 @@ fn evaluate_cached(_ s: State, _ root: i64) -> i64 uses (routes: Navigation) {
             }
             // Reward a useful siege train at a real defended frontier, but cap the
             // purpose bonus so the opponent does not blindly buy siege-only armies.
-            if nearby_siege_target { score += sign * imin(s.siege[i], 3) * 20 }
-            if connected && nearby_siege_target && s.specialty[i] == 2 { score += sign * 6 }
-            if terrain(s, i) == 7 || terrain(s, i) == 9 { score += sign * 18 }
-            if s.troops[i] > 1 { score += sign * ((span - distance) * s.troops[i]) }
+            if nearby_siege_target { parts[5] += sign * imin(s.siege[i], 3) * 20 }
+            if connected && nearby_siege_target && s.specialty[i] == 2 { parts[3] += sign * 6 }
+            if terrain(s, i) == 7 || terrain(s, i) == 9 { parts[4] += sign * 18 }
+            if s.troops[i] > 1 { parts[4] += sign * ((span - distance) * s.troops[i]) }
             if adjacent(s, i, enemy_capital) {
-                score += sign * s.troops[i] * 5
+                parts[5] += sign * s.troops[i] * 5
                 if s.troops[i] > 1 {
                     let attackers = detachment(army_at(s, i), s.troops[i] - 1)
                     if attack_power(s, enemy_capital, attackers) > defense(s, enemy_capital) {
-                        score += sign * 300
+                        parts[5] += sign * 300
                     }
                 }
             }
@@ -681,16 +742,27 @@ fn evaluate_cached(_ s: State, _ root: i64) -> i64 uses (routes: Navigation) {
     }
     let own_budget = economy_with_supply(s, root, own_supply)
     let enemy_budget = economy_with_supply(s, 3 - root, enemy_supply)
-    score += (own_budget.food_production - own_budget.food_upkeep) * 5 -
+    parts[3] += (own_budget.food_production - own_budget.food_upkeep) * 5 -
         (enemy_budget.food_production - enemy_budget.food_upkeep) * 5
-    score -= own_budget.shortage * 25
-    score += enemy_budget.shortage * 25
-    score
+    parts[3] -= own_budget.shortage * 25
+    parts[3] += enemy_budget.shortage * 25
+    if focus.kind == 1 {
+        parts[6] = 2 * defense(s, focus.target) - 50 * direct_capital_threats(s, root)
+    } else if focus.kind == 2 {
+        if s.owner[focus.target] != root { parts[6] = -20 }
+        else if own_supply[focus.target] { parts[6] = 40 }
+    } else if focus.kind == 3 {
+        parts[6] = 3 * (own_budget.food_production - own_budget.food_upkeep) - 10 * own_budget.shortage
+    }
+    Evaluation { parts }
 }
 fn ranked(_ s: State, _ root: i64) -> Actions uses (Navigation) {
+    ranked_focused(s, root, select_focus(s, root))
+}
+fn ranked_focused(_ s: State, _ root: i64, _ focus: Focus) -> Actions uses (Navigation) {
     var list = legal(s)
     var scores = [0; 1024]
-    for i in 0 .. list.len { scores[i] = evaluate_cached(apply(s, list.items[i]), root) }
+    for i in 0 .. list.len { scores[i] = evaluation_total(breakdown_cached(apply(s, list.items[i]), root, focus)) }
     for i in 1 .. list.len {
         let chosen = list.items[i]
         let value = scores[i]
@@ -713,17 +785,20 @@ fn search(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i64) -> i
     with (Navigation = routes) { search_cached(s, depth, root, low, high) }
 }
 fn search_cached(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i64) -> i64 uses (stats: mut Search, Navigation) {
+    search_focused_cached(s, depth, root, low, high, select_focus(s, root))
+}
+fn search_focused_cached(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i64, _ focus: Focus) -> i64 uses (stats: mut Search, Navigation) {
     // Depth counts actions, not orders. A two-order move advances the side in
     // apply(); the actual resulting side controls maximizing/minimizing here.
     stats.nodes += 1
-    if depth == 0 || s.result != 0 || s.decision_pending { return evaluate_cached(s, root) }
-    let list = ranked(s, root)
+    if depth == 0 || s.result != 0 || s.decision_pending { return evaluation_total(breakdown_cached(s, root, focus)) }
+    let list = ranked_focused(s, root, focus)
     let bound = if list.len < 6 { list.len } else { 6 }
     var alpha = low
     var beta = high
     var best: i64 = if s.side == root { -200000 } else { 200000 }
     for i in 0 .. bound {
-        let value = search_cached(apply(s, list.items[i]), depth - 1, root, alpha, beta)
+        let value = search_focused_cached(apply(s, list.items[i]), depth - 1, root, alpha, beta, focus)
         if s.side == root { best = imax(best, value)
             alpha = imax(alpha, best) }
         else { best = imin(best, value)
@@ -733,21 +808,67 @@ fn search_cached(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i6
     best
 }
 fn choose(_ s: State, _ difficulty: i64) -> Action uses (stats: mut Search) {
+    decide(s, difficulty).action
+}
+fn decide(_ s: State, _ difficulty: i64) -> Decision uses (stats: mut Search) {
     let routes = navigation(s)
-    with (Navigation = routes) { choose_cached(s, difficulty) }
+    with (Navigation = routes) { decide_cached(s, difficulty) }
 }
 fn choose_cached(_ s: State, _ difficulty: i64) -> Action uses (stats: mut Search, Navigation) {
-    assert(s.result == 0 && !s.decision_pending)
-    let list = ranked(s, s.side)
-    if difficulty == 0 { stats.nodes += list.len.downcast_unchecked()
-        return list.items[0] }
-    let bound = if list.len < 10 { list.len } else { 10 }
-    var best = list.items[0]
-    var score: i64 = -200000
-    for i in 0 .. bound {
-        let value = search_cached(apply(s, list.items[i]), 3, s.side, -200000, 200000)
-        if value > score { score = value
-            best = list.items[i] }
+    decide_cached(s, difficulty).action
+}
+fn positive_highlight(_ deltas: [i64; 8]) -> i64 {
+    var best: i64 = 0
+    var label: i64 = 0
+    for i in 0 .. 8 {
+        if deltas[i] > best { best = deltas[i]
+            label = (i + 1).downcast_unchecked() }
     }
-    best
+    label
+}
+fn decide_cached(_ s: State, _ difficulty: i64) -> Decision uses (stats: mut Search, Navigation) {
+    assert(s.result == 0 && !s.decision_pending)
+    let before_nodes = stats.nodes
+    let focus = select_focus(s, s.side)
+    let list = ranked_focused(s, s.side, focus)
+    var best = list.items[0]
+    var score = evaluation_total(breakdown_cached(apply(s, best), s.side, focus))
+    if difficulty == 0 { stats.nodes += list.len.downcast_unchecked() }
+    else {
+        let bound = if list.len < 10 { list.len } else { 10 }
+        score = -200000
+        for i in 0 .. bound {
+            let value = search_focused_cached(apply(s, list.items[i]), 3, s.side, -200000, 200000, focus)
+            if value > score { score = value
+                best = list.items[i] }
+        }
+    }
+    let before = breakdown_cached(s, s.side, focus)
+    let after = breakdown_cached(apply(s, best), s.side, focus)
+    var deltas = [0; 8]
+    for i in 0 .. 8 { deltas[i] = after.parts[i] - before.parts[i] }
+    Decision {
+        action: best, side: s.side, focus, depth: if difficulty == 0 { 1 } else { 4 },
+        nodes: stats.nodes - before_nodes, search_score: score,
+        before_score: evaluation_total(before), after_score: evaluation_total(after),
+        deltas, highlight: positive_highlight(deltas), order_cost: order_cost(s, best),
+    }
+}
+fn empty_decision() -> Decision {
+    Decision { action: pass(), side: 0, focus: Focus { kind: 4, target: MAX_TILES },
+        depth: 0, nodes: 0, search_score: 0, before_score: 0, after_score: 0,
+        deltas: [0; 8], highlight: 0, order_cost: 0 }
+}
+fn empty_decision_history() -> DecisionHistory {
+    DecisionHistory { items: [empty_decision(); 2], trace_indices: [0; 2], len: 0 }
+}
+fn remember_decision(_ decision: Decision, _ trace_index: usize) uses (history: mut DecisionHistory) {
+    if history.len == 2 {
+        history.items[0] = history.items[1]
+        history.trace_indices[0] = history.trace_indices[1]
+        history.len = 1
+    }
+    history.items[history.len] = decision
+    history.trace_indices[history.len] = trace_index
+    history.len += 1
 }

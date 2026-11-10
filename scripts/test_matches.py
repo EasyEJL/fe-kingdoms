@@ -18,11 +18,12 @@ def match(name,levels,scenario=0,max_actions=24):
         if data['state']['result'] or data['state']['decisionPending'] or data['state']['traceCapacityReached']:break
         data,elapsed=invoke(3,levels[side-1],actions,scenario)
         assert len(data['actions'])==len(actions)+1
+        assert len(data['decisions'])==1 and data['decisions'][0]['traceIndex']==len(actions)
         actions=data['actions'];durations.append(elapsed)
         for tile in data['tiles']:
             assert tile['infantry']+tile['cavalry']+tile['siege']==tile['troops']
             assert min(tile['infantry'],tile['cavalry'],tile['siege'])>=0
-        turns.append({'side':side,'difficulty':levels[side-1],'nodes':data['state']['nodes']})
+        turns.append({'side':side,'difficulty':levels[side-1],'nodes':data['state']['nodes'],'decision':data['decisions'][0]})
         side=data['state']['side']
     replay,_=invoke(1,levels[1],actions,scenario)
     assert replay['tiles']==data['tiles']

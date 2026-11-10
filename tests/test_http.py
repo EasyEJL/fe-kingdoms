@@ -41,6 +41,8 @@ class AdapterTests(unittest.TestCase):
             wire=request_text(dict(version=version,mode=1,difficulty=0,actions=[]))
             output=subprocess.run([str(root/'out'/name)],input=wire,text=True,capture_output=True,check=True).stdout
             parsed=decode(output)
+            self.assertEqual('decisions' in parsed,version>=7)
+            if version>=7:self.assertEqual(parsed['decisions'],[])
             self.assertEqual(len(parsed['tiles'][0]),{1:8,2:8,3:11,4:14,5:14,6:14,7:18}[version])
             self.assertEqual(len(parsed['previews'][0]),{1:10,2:10,3:14,4:24,5:24,6:28,7:32}[version])
             self.assertEqual('defense' in parsed['tiles'][0],version>=7)

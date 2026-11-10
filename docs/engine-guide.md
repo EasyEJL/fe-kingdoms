@@ -96,13 +96,13 @@ The native forecast loop calls `apply(s, action)` for every legal action and rep
 
 ## 7. How the computer thinks
 
-Read `evaluate`, `ranked`, `search`, then `choose`.
+Read `select_focus`, `breakdown_cached`, `ranked_focused`, `search_focused_cached`, then `decide` and the `choose` wrapper.
 
-`evaluate` scores a position from one kingdom's perspective: victory first, then resources, territory, troops, specialist value and nearby siege targets, forts, supply, settlements, farms, bridges, advancement, threats and food shortages. These weights are strategy heuristics, not extra rules or resources.
+`breakdown_cached` produces additive components for a position and frozen decision focus; `evaluation_total` sums them. The baseline `evaluate`/`evaluate_cached` diagnostic wrappers use normal advancement, while production `decide` supplies the actual selected focus. Scoring includes: victory first, then resources, territory, troops, specialist value and nearby siege targets, forts, supply, settlements, farms, bridges, advancement, threats and food shortages. These weights are strategy heuristics, not extra rules or resources.
 
-`ranked` tries legal actions with `apply` and sorts their scores. Easy takes the top one-ply result. It is short-sighted but still takes an obvious win.
+`ranked_focused` tries legal actions with `apply` and sorts their actual focused evaluation totals. Easy takes the top one-ply result. It is short-sighted but still takes an obvious win.
 
-Hard examines up to ten root candidates and three further action plies, keeping up to six candidates inside the tree. Alpha-beta bounds skip branches that cannot improve the result. Because a kingdom gets two orders, a ply does not necessarily switch sides: `search` checks `s.side` to maximize or minimize appropriately.
+Hard examines up to ten root candidates and three further action plies, keeping up to six candidates inside the tree. Alpha-beta bounds skip branches that cannot improve the result. Because a kingdom gets two orders, a ply does not necessarily switch sides: `search_focused_cached` checks `s.side` to maximize or minimize appropriately.
 
 Beam limits keep work bounded but do not guarantee optimal play. Stable ordering makes decisions repeatable. `Search.nodes` is the reported search counter, not a count of every heuristic evaluation during sorting.
 
@@ -196,3 +196,11 @@ A specialty is tile state, not ownership state. Capture changes ownership withou
 Construction records two bits in State, so replay reconstructs it from kind12 just like other actions. A designated site remains identifiable after building. The new bridge is neutral and empty; ownership changes only when an army occupies it. Supply and military movement remain different questions.
 
 Navigation prepares all four topology variants once per decision. Read the route-selection helper inside evaluation: it must index using the candidate State, not just the original root. Tests compare every variant with an independent graph oracle and evaluate a built position using a cache prepared before construction. This is a bounded domain-specific cache, not a general mutable-map framework.
+
+## V7 stage 4: priorities and honest feedback
+
+The small priority selector reads the current board, then freezes a focus/target for one decision. Defending a directly threatened capital comes before reconnecting a valuable holding, food support and normal advancement. The focus is actually used in evaluation. It is not an invented description added after the move, and can change on the next order.
+
+Read the named evaluation components and their total together. The same total ranks actions and scores the search leaves. The automatic decision record reports the actual chosen search value and the immediate component changes from applying that action. These are different quantities: Hard may accept a short-term loss for a better searched continuation. The UI therefore calls the component result an immediate evaluation change, not the complete rationale.
+
+Only the last two actual automated decisions are returned, sufficient for an ordinary Red turn. The action replay remains minimal and authoritative; a replay-only load has no saved search explanation. Follow the native trace index when matching a report to an action. Per-decision nodes and configured action-ply depth describe effort, not guaranteed strength or exhaustive search.

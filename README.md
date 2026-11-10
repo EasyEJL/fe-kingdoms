@@ -44,6 +44,7 @@ On the small map, move five troops from A1 to B1, then seven from B1 to the fore
 - Moving detachments are proportional after reserving a garrison. Movement cost uses the actual detachment: any siege costs two orders anywhere, otherwise cavalry entering forest costs two, otherwise one. A costly move is unavailable with only one order left. Casualties remove infantry first, then cavalry, then siege. The rules remain deterministic; no random combat or hidden bonuses.
 - Capture the enemy capital for immediate victory. Four consecutive pass actions draw the match. Small/medium/large campaigns pause after 60/120/180 full rounds. Choose Extend 20 rounds or Accept draw; extension begins the deferred Blue turn exactly once.
 - Order forecasts show each kingdom's connected and cut-off territory before and after the order, using Fe's actual resulting state. Capture can increase connected count without reconnecting an existing holding.
+- Compact opponent feedback shows Fe's actual current priority and immediate evaluation changes for its latest orders. These are not guaranteed future plans. Search reports are not stored in exported action replays.
 - Easy uses one-ply greedy evaluation; Hard uses bounded four-ply beam alpha-beta search. Their rules and resources are identical, without hidden bonuses.
 
 ## Saves and compatibility

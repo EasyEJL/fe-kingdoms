@@ -10,7 +10,7 @@ The authoritative path is short enough to explain directly:
 
 1. `src/engine.fe`: `State` and `Action` represent a position and order.
 2. `legal`/`is_legal` decide which orders exist; `apply` owns their effects, supply/economy, turn changes and results.
-3. `choose`, `ranked`, `evaluate_cached` and `search_cached` select the computer action. Easy and Hard have different planning effort, with identical rules/resources.
+3. `decide`/`choose`, `ranked_focused`, `breakdown_cached` and `search_focused_cached` select the computer action. Easy and Hard have different planning effort, with identical rules/resources.
 4. `src/native.fe`: bounded input parsing, deterministic replay and Fe-generated state/action/forecast records.
 5. `server.py`: validates request shape, transports numeric input and decodes output. `web/index.html` renders it and submits selected orders.
 

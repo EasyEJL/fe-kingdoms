@@ -10,6 +10,11 @@ ROOT = Path(__file__).resolve().parent
 MAX_BODY = 262144
 CURRENT_VERSION = 7
 MAX_ACTIONS = 2048
+DECISION_FIELDS = ('traceIndex','side','kind','from','to','amount','focus','target',
+                   'depth','nodes','searchScore','beforeScore','afterScore',
+                   'materialDelta','resourcesDelta','supplyDelta','economyDelta',
+                   'positionDelta','pressureDelta','focusDelta','terminalDelta',
+                   'highlight','orderCost')
 
 
 def request_text(data):
@@ -48,6 +53,8 @@ def decode(text):
         version = data.get('version', 0)
         if tag == 0 and len(values) == 3 and 'version' not in data and values[0] in range(1, CURRENT_VERSION + 1):
             data['version'], data['difficulty'], count = values
+            if data['version'] >= 7:
+                data['decisions'] = []
         elif tag == 1 and version and len(values) == (17 if version >= 5 else 13) and 'state' not in data:
             data['state'] = dict(zip(('side', 'orders', 'turn', 'result', 'gold1', 'gold2', 'quiet', 'lastKind', 'lastFrom', 'lastTo', 'lastAmount', 'nodes', 'depth', 'completedRounds', 'roundLimit', 'decisionPending', 'traceCapacityReached'), values))
         elif tag == 2 and len(values) == {1:6,2:8,3:11,4:14,5:14,6:14,7:18}.get(version):
@@ -59,6 +66,8 @@ def decode(text):
             data['economy'].append(dict(zip(('side','food','goldIncome','foodProduction','foodUpkeep','foodNet','disconnectedTiles','shortageLossesNextTurn','projectedFood'),values)))
         elif tag == 8 and version >= 6 and len(values)==3 and values[0]==len(data['supply'])+1:
             data['supply'].append(dict(zip(('side','connectedOwned','cutOffOwned'),values)))
+        elif tag == 9 and version >= 7 and len(values)==len(DECISION_FIELDS) and len(data['decisions'])<2:
+            data['decisions'].append(dict(zip(DECISION_FIELDS,values)))
         elif tag == 3 and version and len(values) == 4:
             data['legal'].append(values)
         elif tag == 5 and len(values) == {1:10,2:10,3:14,4:24,5:24,6:28,7:32}.get(version) and values[0] == len(data['previews']):
@@ -72,6 +81,22 @@ def decode(text):
         for tile in data['tiles']: tile.update(q=tile['index']%5,r=tile['index']//5)
     if data.get('version') not in (1,2,3,4,5,6,7) or (data.get('version',0) >= 5 and ('traceCapacityReached' not in data.get('state',{}) or 'traceCapacity' not in data.get('map',{}))) or (data.get('version',0) >= 6 and (len(data['supply'])!=2 or any('redCutOffAfter' not in p for p in data['previews']))) or 'state' not in data or 'map' not in data or not 1<=data['map']['count']<=63 or len(data['tiles'])!=data['map']['count'] or [t['index'] for t in data['tiles']]!=list(range(data['map']['count'])) or len(data['actions']) != count or len(data['previews']) != len(data['legal']) or (data.get('version',0)>=3 and len(data['economy'])!=2):
         raise RuntimeError('Incomplete native engine response.')
+    if data['version'] >= 7:
+        decisions=data['decisions']
+        suffix=list(range(len(data['actions'])-len(decisions),len(data['actions'])))
+        if data['difficulty'] not in (0,1) or len(data['actions'])>MAX_ACTIONS or [d['traceIndex'] for d in decisions]!=suffix:
+            raise RuntimeError('Invalid native decision trace.')
+        for decision in decisions:
+            index=decision['traceIndex']
+            if (not 0<=index<MAX_ACTIONS or decision['side'] not in (1,2)
+                    or decision['focus'] not in (1,2,3,4)
+                    or not (decision['target']==64 if decision['focus']==3 else 0<=decision['target']<data['map']['count'])
+                    or decision['depth']!=(1 if data['difficulty']==0 else 4)
+                    or decision['nodes']<=0 or not 0<=decision['highlight']<=8
+                    or decision['orderCost'] not in (1,2)
+                    or sum(decision[field] for field in DECISION_FIELDS[13:21])!=decision['afterScore']-decision['beforeScore']
+                    or [decision[field] for field in ('kind','from','to','amount')]!=data['actions'][index]):
+                raise RuntimeError('Invalid native decision record.')
     return data
 
 
@@ -84,7 +109,14 @@ def game(data):
         raise ValueError('Fe rejected this replay or action. Your previous board is unchanged.')
     if result.returncode:
         raise RuntimeError(f'Native engine failed (exit {result.returncode}).')
-    return decode(result.stdout)
+    response=decode(result.stdout)
+    if data['version']>=7:
+        added=len(response['actions'])-len(data['actions'])
+        if (response['version']!=data['version'] or response['difficulty']!=data['difficulty'] or response['actions'][:len(data['actions'])]!=data['actions']
+                or not 0<=added<=2 or len(response['decisions'])!=added
+                or (data.get('mode',0)==1 and added)):
+            raise RuntimeError('Native decisions do not match this request.')
+    return response
 
 
 class Handler(BaseHTTPRequestHandler):

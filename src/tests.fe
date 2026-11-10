@@ -1296,8 +1296,257 @@ fn hard_can_decline_a_crossing_exposed_to_a_strong_enemy() {
     assert(is_legal(s, action) && is_legal(s, build) && !same_action(action, build))
     // The fortified army can contest the new adjacent bridge. Evaluate both
     // candidate lines at the policy's real horizon rather than force a build.
-    let chosen_value = with (Search = stats) { search(apply(s, action), 3, 1, -200000, 200000) }
-    let build_value = with (Search = stats) { search(apply(s, build), 3, 1, -200000, 200000) }
+    let focus = select_focus(s, 1)
+    let routes = navigation(s)
+    let chosen_value = with (Navigation = routes, Search = stats) { search_focused_cached(apply(s, action), 3, 1, -200000, 200000, focus) }
+    let build_value = with (Navigation = routes, Search = stats) { search_focused_cached(apply(s, build), 3, 1, -200000, 200000, focus) }
     assert(chosen_value > build_value)
     check_bounds(apply(s, action))
+}
+
+// V7 TRUTHFUL BOUNDED POLICY FOCUS AND DECISION REPORTS
+#[test]
+fn additive_evaluation_keeps_normal_material_resources_and_supply_weights() {
+    for scenario in 0 .. 3 {
+        let s = initial(scenario)
+        let routes = navigation(s)
+        let focus = Focus { kind: 4, target: capital(s, 2) }
+        let before = with (Navigation = routes) { breakdown_cached(s, 1, focus) }
+        for component in 0 .. 8 { assert(before.parts[component] == 0) }
+        var changed = s
+        changed.gold[1] += 1
+        changed.food[1] += 1
+        let resources = with (Navigation = routes) { breakdown_cached(changed, 1, focus) }
+        assert(resources.parts[1] == 4 && evaluation_total(resources) == 4)
+        changed = s
+        changed.troops[0] += 1
+        let material = with (Navigation = routes) { breakdown_cached(changed, 1, focus) }
+        assert(material.parts[0] == 12 && evaluation_total(material) == 12)
+        changed = s
+        changed.fort[0] += 1
+        let fort = with (Navigation = routes) { breakdown_cached(changed, 1, focus) }
+        assert(fort.parts[0] == 4 && evaluation_total(fort) == 4)
+    }
+    var s = initial(0)
+    s.owner[6] = 1
+    let routes = navigation(s)
+    let captured = with (Navigation = routes) { breakdown_cached(s, 1, Focus { kind: 4, target: 14 }) }
+    assert(captured.parts[0] == 40 && captured.parts[2] == 28)
+    assert(evaluation_total(captured) == 68 && captured.parts[6] == 0)
+}
+#[test]
+fn focus_priority_is_observable_and_targets_a_specific_holding() {
+    var s = initial(0)
+    assert(select_focus(s, 1).kind == 4 && select_focus(s, 1).target == 14)
+    s.owner[3] = 1
+    s.troops[3] = 2
+    s.owner[8] = 1
+    s.troops[8] = 12
+    assert(select_focus(s, 1).kind == 2 && select_focus(s, 1).target == 8)
+    s.owner[1] = 2
+    s.troops[1] = 10
+    assert(direct_capital_threats(s, 1) == 1)
+    assert(select_focus(s, 1).kind == 1 && select_focus(s, 1).target == 0)
+    s = hungry_town_position()
+    assert(select_focus(s, 1).kind == 3 && select_focus(s, 1).target == MAX_TILES)
+    s.owner[8] = 1
+    assert(select_focus(s, 1).kind == 2 && select_focus(s, 1).target == 8)
+}
+#[test]
+fn focused_capital_defense_and_food_are_real_scoring_terms() {
+    var s = initial(0)
+    s.owner[1] = 2
+    s.troops[1] = 9
+    s.gold[1] = 2
+    let focus = select_focus(s, 1)
+    let routes = navigation(s)
+    let fortify = Action { kind: 3, from: 0, to: 0, amount: 1 }
+    assert(is_legal(s, fortify) && focus.kind == 1)
+    let before = with (Navigation = routes) { breakdown_cached(s, 1, focus) }
+    let defended = apply(s, fortify)
+    let after = with (Navigation = routes) { breakdown_cached(defended, 1, focus) }
+    assert(before.parts[6] == -36 && after.parts[6] == 16)
+    assert(direct_capital_threats(defended, 1) == 0)
+    assert(evaluation_total(after) - evaluation_total(before) == evaluate(defended, 1) - evaluate(s, 1) + 52)
+    let unrelated = apply(s, Action { kind: 3, from: 5, to: 5, amount: 1 })
+    let unrelated_parts = with (Navigation = routes) { breakdown_cached(unrelated, 1, focus) }
+    assert(evaluate(defended, 1) > evaluate(unrelated, 1))
+    assert(evaluation_total(after) - evaluation_total(unrelated_parts) == evaluate(defended, 1) - evaluate(unrelated, 1) + 52)
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let decision = with (Search = stats) { decide(s, difficulty.downcast_unchecked()) }
+        // Ending the turn can also be sound here: this cut-off enemy loses a
+        // troop before it can act. Require actual protection, not one order.
+        assert(is_legal(s, decision.action))
+        let protected = apply(s, decision.action)
+        assert(protected.owner[0] == 1 && protected.result == 0 && direct_capital_threats(protected, 1) == 0)
+        assert(decision.focus.kind == 1 && decision.focus.target == 0)
+    }
+    s = hungry_town_position()
+    let food_focus = select_focus(s, 1)
+    let granary = apply(s, Action { kind: 11, from: 5, to: 5, amount: 1 })
+    let arsenal = apply(s, Action { kind: 11, from: 5, to: 5, amount: 2 })
+    let food_routes = navigation(s)
+    let granary_parts = with (Navigation = food_routes) { breakdown_cached(granary, 1, food_focus) }
+    let arsenal_parts = with (Navigation = food_routes) { breakdown_cached(arsenal, 1, food_focus) }
+    assert(food_focus.kind == 3)
+    assert(granary_parts.parts[6] - arsenal_parts.parts[6] == 26)
+    assert(evaluation_total(granary_parts) - evaluation_total(arsenal_parts) == evaluate(granary, 1) - evaluate(arsenal, 1) + 26)
+}
+#[test]
+fn root_focus_remains_frozen_when_the_action_completes_its_objective() {
+    let s = apply(crossing_reconnection_position(), Action { kind: 12, from: 1, to: 2, amount: 1 })
+    let focus = select_focus(s, 1)
+    assert(focus.kind == 2 && focus.target == 3)
+    var stats = Search { nodes: 0 }
+    let decision = with (Search = stats) { decide(s, 0) }
+    let after = apply(s, decision.action)
+    assert(supply(after, 1)[3] && select_focus(after, 1).kind != 2)
+    assert(decision.focus.kind == 2 && decision.focus.target == 3 && decision.deltas[6] == 40)
+    let routes = navigation(s)
+    let frozen = with (Navigation = routes) { breakdown_cached(after, 1, focus) }
+    let changed = with (Navigation = routes) { breakdown_cached(after, 1, select_focus(after, 1)) }
+    assert(decision.after_score == evaluation_total(frozen))
+    assert(evaluation_total(frozen) == evaluation_total(changed) + 40)
+}
+#[test]
+fn decision_reports_match_actual_actions_components_and_searched_values() {
+    for scenario in 0 .. 3 {
+        for difficulty in 0 .. 2 {
+            let s = initial(scenario)
+            var stats = Search { nodes: 17 }
+            let report = with (Search = stats) { decide(s, difficulty.downcast_unchecked()) }
+            assert(is_legal(s, report.action) && report.side == s.side)
+            assert(report.depth == if difficulty == 0 { 1 } else { 4 })
+            assert(report.nodes > 0 && report.nodes == stats.nodes - 17)
+            assert(report.order_cost == order_cost(s, report.action))
+            let routes = navigation(s)
+            let before = with (Navigation = routes) { breakdown_cached(s, s.side, report.focus) }
+            let after = with (Navigation = routes) { breakdown_cached(apply(s, report.action), s.side, report.focus) }
+            assert(report.before_score == evaluation_total(before) && report.after_score == evaluation_total(after))
+            var total_delta: i64 = 0
+            var largest: i64 = 0
+            var expected_highlight: i64 = 0
+            for component in 0 .. 8 {
+                assert(report.deltas[component] == after.parts[component] - before.parts[component])
+                total_delta += report.deltas[component]
+                if report.deltas[component] > largest {
+                    largest = report.deltas[component]
+                    expected_highlight = (component + 1).downcast_unchecked()
+                }
+            }
+            assert(total_delta == report.after_score - report.before_score && report.highlight == expected_highlight)
+            var repeated_stats = Search { nodes: 0 }
+            let repeat = with (Search = repeated_stats) { decide(s, difficulty.downcast_unchecked()) }
+            assert(same_action(report.action, repeat.action) && report.nodes == repeat.nodes)
+            assert(report.search_score == repeat.search_score && report.after_score == repeat.after_score)
+            if difficulty == 0 {
+                assert(report.search_score == report.after_score && report.nodes == legal(s).len.downcast_unchecked())
+            } else {
+                assert(report.nodes <= 2590)
+                var oracle = Search { nodes: 0 }
+                let horizon = with (Navigation = routes, Search = oracle) {
+                    search_focused_cached(apply(s, report.action), 3, s.side, -200000, 200000, report.focus)
+                }
+                assert(report.search_score == horizon)
+            }
+        }
+    }
+}
+#[test]
+fn terminal_scores_dominate_every_focus_and_highlights_handle_tradeoffs() {
+    var s = initial(0)
+    s.owner[13] = 1
+    s.troops[13] = 12
+    s.siege[13] = 2
+    s.troops[14] = 12
+    s.fort[14] = 2
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let report = with (Search = stats) { decide(s, difficulty.downcast_unchecked()) }
+        let won = apply(s, report.action)
+        assert(won.result == 1 && report.after_score == 100000 - won.turn && report.highlight == 8)
+    }
+    for focus_kind in 1 .. 5 {
+        let focus = Focus { kind: focus_kind.downcast_unchecked(), target: if focus_kind == 3 { MAX_TILES } else { 0 } }
+        let routes = navigation(s)
+        for result in 1 .. 4 {
+            var terminal = s
+            terminal.result = result.downcast_unchecked()
+            let scored = with (Navigation = routes) { breakdown_cached(terminal, 1, focus) }
+            for component in 0 .. 7 { assert(scored.parts[component] == 0) }
+            assert(scored.parts[7] == if result == 1 { 100000 - s.turn } else if result == 2 { -100000 + s.turn } else { 0 })
+        }
+    }
+    assert(positive_highlight([-1, -2, 0, -3, 0, 0, -4, 0]) == 0)
+    assert(positive_highlight([5, 5, 0, 0, 0, 0, 0, 0]) == 1)
+    // A positive component does not imply that the immediate total improved.
+    assert(positive_highlight([10, -20, 0, 0, 0, 0, 0, 0]) == 1)
+    assert(positive_highlight([10, 0, 0, 0, 0, 0, 0, 100000]) == 8)
+}
+#[test]
+fn automatic_decision_history_retains_only_the_last_two_actual_actions() {
+    var s = initial(0)
+    var history = empty_decision_history()
+    assert(history.len == 0)
+    var previous = empty_decision()
+    var stats = Search { nodes: 0 }
+    for step in 0 .. 6 {
+        let report = with (Search = stats) { decide(s, 0) }
+        with (DecisionHistory = history) { remember_decision(report, step) }
+        assert(history.len == if step == 0 { 1 } else { 2 })
+        let last = history.len - 1
+        assert(history.trace_indices[last] == step && same_action(history.items[last].action, report.action))
+        assert(history.items[last].nodes == report.nodes && history.items[last].search_score == report.search_score)
+        if step > 0 {
+            assert(history.trace_indices[0] == step - 1)
+            assert(same_action(history.items[0].action, previous.action))
+        }
+        previous = report
+        s = apply(s, report.action)
+        assert(s.result == 0 && !s.decision_pending)
+    }
+}
+#[test]
+fn infantry_capture_can_fortify_but_two_order_assaults_cannot() {
+    var s = initial(0)
+    s.troops[5] = 6
+    let assault = Action { kind: 1, from: 5, to: 6, amount: 5 }
+    let fortify = Action { kind: 3, from: 6, to: 6, amount: 1 }
+    assert(is_legal(s, assault) && order_cost(s, assault) == 1)
+    let captured = apply(s, assault)
+    assert(captured.owner[6] == 1 && captured.side == 1 && captured.orders == 1 && supply(captured, 1)[6])
+    assert(is_legal(captured, fortify))
+    let fortified = apply(captured, fortify)
+    assert(fortified.fort[6] == 1 && fortified.gold[1] == s.gold[1] - 2)
+    assert(fortified.side == 2 && fortified.food[1] == s.food[1])
+    assert(defense(fortified, 6) == fortified.troops[6] + 2)
+    let routes = navigation(s)
+    let focus = select_focus(s, 1)
+    let candidates = with (Navigation = routes) { ranked_focused(captured, 1, focus) }
+    var found = false
+    for i in 0 .. candidates.len { if same_action(candidates.items[i], fortify) { found = true } }
+    assert(found)
+    var stats = Search { nodes: 0 }
+    let searched = with (Navigation = routes, Search = stats) { search_focused_cached(captured, 1, 1, -200000, 200000, focus) }
+    let fort_value = with (Navigation = routes) { evaluation_total(breakdown_cached(fortified, 1, focus)) }
+    assert(searched >= fort_value)
+    for role in 1 .. 3 {
+        var heavy = s
+        if role == 1 { heavy.cavalry[5] = 1 } else { heavy.siege[5] = 1 }
+        assert(is_legal(heavy, assault) && order_cost(heavy, assault) == 2)
+        heavy = apply(heavy, assault)
+        assert(heavy.owner[6] == 1 && heavy.side == 2 && !is_legal(heavy, fortify))
+        check_bounds(heavy)
+    }
+    var poor = s
+    poor.gold[1] = 1
+    poor = apply(poor, assault)
+    assert(poor.side == 1 && !is_legal(poor, fortify))
+    var isolated = initial(0)
+    isolated.owner[7] = 1
+    isolated.troops[7] = 6
+    isolated = apply(isolated, Action { kind: 1, from: 7, to: 8, amount: 5 })
+    assert(isolated.side == 1 && isolated.owner[8] == 1 && !supply(isolated, 1)[8])
+    assert(!is_legal(isolated, Action { kind: 3, from: 8, to: 8, amount: 1 }))
 }

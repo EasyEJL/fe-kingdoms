@@ -39,3 +39,4 @@ Add an ADR for a meaningful architectural or rules decision, not every implement
 - [ADR 0011: Forest and composition-based order costs](adr/0011-frontier-forest-movement.md).
 - [ADR 0012: Permanent town specialties](adr/0012-town-specialties.md).
 - [ADR 0013: Bounded permanent shared crossings](adr/0013-shared-crossings.md).
+- [ADR 0014: Bounded opponent priorities and truthful feedback](adr/0014-opponent-focus-feedback.md).

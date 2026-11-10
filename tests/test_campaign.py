@@ -31,6 +31,7 @@ class CampaignTests(unittest.TestCase):
             # Native automation pauses instead of choosing the human's continuation.
             automatic=run(trace,scenario,mode=0)
             self.assertEqual(automatic['actions'],trace)
+            self.assertEqual(automatic['decisions'],[])
             self.assertEqual(automatic['state']['result'],0)
             for mode in (2,3):
                 wire=request_text(dict(version=CURRENT_VERSION,scenario=scenario,mode=1,difficulty=0,actions=trace)).replace(f'{CURRENT_VERSION} 1 ',f'{CURRENT_VERSION} {mode} ',1)
@@ -74,6 +75,7 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(data['state']['traceCapacityReached'],1)
         self.assertEqual(data['legal'],[])
         self.assertEqual(data['previews'],[])
+        self.assertEqual(data['decisions'],[])
         frozen=run(trace,version=5)
         self.assertEqual(frozen['actions'],trace)
         self.assertEqual(frozen['state']['result'],0)

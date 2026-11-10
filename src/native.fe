@@ -92,6 +92,26 @@ fn emit_economy(_ s: State, _ side: i64) uses (writer: mut Write) {
     field(projected.food[player])
     write_char(10)
 }
+fn emit_decision(_ decision: Decision, _ trace_index: usize) uses (writer: mut Write) {
+    out(9)
+    field(small(trace_index))
+    field(decision.side)
+    field(decision.action.kind)
+    field(small(decision.action.from))
+    field(small(decision.action.to))
+    field(decision.action.amount)
+    field(decision.focus.kind)
+    field(small(decision.focus.target))
+    field(decision.depth)
+    field(decision.nodes)
+    field(decision.search_score)
+    field(decision.before_score)
+    field(decision.after_score)
+    for i in 0 .. 8 { field(decision.deltas[i]) }
+    field(decision.highlight)
+    field(decision.order_cost)
+    write_char(10)
+}
 fn run() -> i32 uses (input: mut Input, reader: mut Read, writer: mut Write) {
     let version = number()
     let mode = number()
@@ -118,12 +138,15 @@ fn run() -> i32 uses (input: mut Input, reader: mut Read, writer: mut Write) {
     }
     if !input_done() { return 2 }
     var stats = Search { nodes: 0 }
+    var decisions = empty_decision_history()
     if mode != 1 {
         while s.result == 0 && !s.decision_pending && (s.side == 2 || mode >= 2) {
             // Capacity is an unfinished transport pause, not a game result.
             if length >= TRACE_CAPACITY { break }
-            let action = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+            let decision = with (Search = stats) { decide(s, difficulty.downcast_unchecked()) }
+            let action = decision.action
             assert(is_legal(s, action))
+            with (DecisionHistory = decisions) { remember_decision(decision, length) }
             s = apply(s, action)
             trace[length] = action
             length += 1
@@ -282,6 +305,7 @@ fn run() -> i32 uses (input: mut Input, reader: mut Read, writer: mut Write) {
         field(trace[i].amount)
         write_char(10)
     }
+    for i in 0 .. decisions.len { emit_decision(decisions.items[i], decisions.trace_indices[i]) }
     0
 }
 pub fn main() -> i32 {
