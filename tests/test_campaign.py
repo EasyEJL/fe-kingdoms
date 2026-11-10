@@ -28,6 +28,7 @@ class CampaignTests(unittest.TestCase):
             self.assertEqual(pending['map']['traceCapacity'],2048)
             self.assertEqual([pending['state'][k] for k in ('side','orders','turn','result','completedRounds','roundLimit','decisionPending')],[2,0,limit*2,0,limit,limit,1])
             self.assertEqual(pending['legal'],[EXTEND,DRAW])
+            self.assertTrue(all(not row['eligible'] for row in pending['developments']))
             # Native automation pauses instead of choosing the human's continuation.
             automatic=run(trace,scenario,mode=0)
             self.assertEqual(automatic['actions'],trace)
@@ -76,6 +77,8 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(data['legal'],[])
         self.assertEqual(data['previews'],[])
         self.assertEqual(data['decisions'],[])
+        self.assertTrue(all(not row['eligible'] for row in data['developments']))
+        self.assertEqual(data['developmentPreviews'],[])
         frozen=run(trace,version=5)
         self.assertEqual(frozen['actions'],trace)
         self.assertEqual(frozen['state']['result'],0)

@@ -43,8 +43,10 @@ class AdapterTests(unittest.TestCase):
             parsed=decode(output)
             self.assertEqual('decisions' in parsed,version>=7)
             if version>=7:self.assertEqual(parsed['decisions'],[])
-            self.assertEqual(len(parsed['tiles'][0]),{1:8,2:8,3:11,4:14,5:14,6:14,7:18}[version])
-            self.assertEqual(len(parsed['previews'][0]),{1:10,2:10,3:14,4:24,5:24,6:28,7:32}[version])
+            self.assertEqual('developments' in parsed,version>=8)
+            self.assertEqual('developmentPreviews' in parsed,version>=8)
+            self.assertEqual(len(parsed['tiles'][0]),{1:8,2:8,3:11,4:14,5:14,6:14,7:18,8:18}[version])
+            self.assertEqual(len(parsed['previews'][0]),{1:10,2:10,3:14,4:24,5:24,6:28,7:32,8:32}[version])
             self.assertEqual('defense' in parsed['tiles'][0],version>=7)
             self.assertEqual('orderCost' in parsed['previews'][0],version>=7)
             for tag in ('2 ','5 '):
@@ -240,8 +242,8 @@ class AdapterTests(unittest.TestCase):
             with self.assertRaises(ValueError):at(trace+[illegal])
 
     def test_legacy_replay_readonly(self):
-        for version,winner in ((1,1),(2,2),(3,1),(4,1),(5,1),(6,1)):
-            filename=f'legacy-v{version}-win.json' if version<6 else 'current-v6-win.json'
+        for version,winner in ((1,1),(2,2),(3,1),(4,1),(5,1),(6,1),(7,1)):
+            filename=f'legacy-v{version}-win.json' if version<6 else f'current-v{version}-win.json'
             fixture=json.loads((Path(__file__).parent/'fixtures'/filename).read_text())
             legacy=game(dict(fixture,mode=1))
             self.assertEqual(legacy['version'],version)

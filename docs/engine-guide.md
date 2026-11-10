@@ -208,3 +208,16 @@ Only the last two actual automated decisions are returned, sufficient for an ord
 ### Verified current-v7 browser/Fe boundary example
 
 At implementation commit `0517958`, replay-only loading the Small opening A1 → B1 with 5 and B1 → B2 with 7 returns exactly two actions, Red to move with 2 orders on side-turn 2. Requesting an automatic response adds two actual Easy Red recruitment orders at E2 (tile 9), then returns Blue with 2 orders on turn 3. The two new reports identify trace indexes 2 and 3, normal-advancement focus targeting Blue's capital, configured depth 1 and 19/25 reported nodes. This was verified through the isolated local HTTP adapter, not by a browser click test. Different future policies may legitimately choose other orders; preserve the implementation/replay version when teaching this exact trace.
+
+## V8 experiment: follow one research order through Fe
+
+The kingdom-development slice is a small example of adding a rule without moving authority into the browser. Read ADR0017 for its experimental prices and compatibility boundary.
+
+1. `State.developments` holds one fixed bitmask per kingdom. This is kingdom knowledge, not a property of a captured town. `development_bit` and `has_development` interpret the three finite IDs.
+2. `development_town` searches owned, supplied towns and returns the lowest eligible infrastructure index. `can_research` combines that result with the turn, prerequisite, ownership of knowledge and actual resource stocks. `legal` emits action kind 13 only when the order is genuinely possible.
+3. `apply` pays the Fe-defined gold/food costs and adds the discovery bit. Normal one-order accounting still controls the handoff. A first-order Charter can unlock a branch as the second order if the town specialty and remaining resources qualify.
+4. `economy_with_supply` computes Charter income and capped farm support from the current board. Losing a required supplied town suspends the benefit. `recruitment_gold` is shared by infantry legality and payment, so Muster cannot make the UI price disagree with the actual purchase.
+5. `native.fe` exports six bounded development rows and one resulting-development projection per legal action. Those projections come from actual `apply`, not a second forecast formula. Python checks the versioned record structure and serializes it; HTML shows prerequisites, eligibility, prices and afterstates.
+6. Replay stores only the ordinary action sequence. Rebuilding it reproduces knowledge and economy. Frozen v7 follows its own engine; a version number is not a safe migration operation.
+
+Stage A deliberately retains the prior evaluator. New legal research does not imply that the old short-horizon opponent will invest well. The planned next experiment changes Fe investment valuation under identical v8 rules, preserving a pinned Stage A baseline for comparison. The observed policy behavior, not just successful compilation, determines whether that change is useful.

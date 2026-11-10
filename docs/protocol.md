@@ -1,11 +1,11 @@
-# Native protocol, frontier version 7 (unreleased)
+# Native protocol, frontier version 8 (unreleased)
 
 The host serializes decimal integers and parses numeric output. Fe owns their game meaning. At most 2,048 actions and 131,072 input bytes are accepted. Invalid input exits 2 without emitting partial successful state; output failure exits 3.
 
 Input:
 
 ```text
-7 MODE DIFFICULTY SCENARIO COUNT
+8 MODE DIFFICULTY SCENARIO COUNT
 KIND FROM TO AMOUNT
 ...COUNT records...
 ```
@@ -36,3 +36,22 @@ V6 sources are frozen unchanged for exact read-only replay. V6 tile/forecast rec
 V7 tag9 contains exactly23 values: traceIndex, side, kind, from, to, amount, focus, target, depth, nodes, searchScore, beforeScore, afterScore, materialDelta, resourcesDelta, supplyDelta, economyDelta, positionDelta, pressureDelta, focusDelta, terminalDelta, highlight, orderCost. At most two records describe the last actual automatic decisions in this invocation. Their action/index must match accepted trace records. Mode1 emits none; mode3 emits one; mode0 emits up to two; mode2 retains its final two. They are ephemeral search reports, not saved replay data.
 
 Focus:1 defend own capital;2 reconnect a cut-off holding;3 support food (target64 means kingdom-wide);4 advance toward the enemy capital using normal positional scoring. Depth is the configured action-ply limit (Easy1, Hard4), not a claim every branch reaches that depth. Nodes count each decision separately. searchScore is the chosen candidate's actual horizon value. The eight immediate component deltas sum to afterScore minus beforeScore under the same root focus. Terminal states use only the terminal component. Highlight0 means no positive immediate component;1..8 selects the largest positive delta in the listed order, with earlier fields winning ties. A highlight is not the full reason for deeper search or a future guarantee.
+
+## V8 kingdom development
+
+V8 retains the exact v7 lengths and meanings of tags 0 through 9, adding research action kind 13 and forecast outcome 9. Frozen v7 sources and its separate decoder retain v7 replay semantics. No old replay is upgraded by changing its version number.
+
+Research uses FROM=TO=the lowest-index owned, supplied town with the required infrastructure, and AMOUNT=discovery ID. Only that canonical tile's order is generated, once per available discovery. IDs are 1 Town Charter, 2 Crop Rotation, 3 Organized Muster. All cost one order and six gold; Charter costs zero food, the branches two food each. Both branches require Charter. Research is permanent kingdom knowledge, never transferred by capturing a town, and cannot be repeated.
+
+- Charter requires any supplied town; while any such town exists, kingdom gold income increases by one total.
+- Crop Rotation requires a supplied Granary town; while any such town exists, each supplied farm adds one food production, capped at two additional food per kingdom. The existing resource cap and upkeep sequence are unchanged.
+- Muster requires a supplied Arsenal town; infantry recruitment at supplied Arsenal towns costs two rather than three gold. Food, headcount, order cost, stack limits, and all specialist recruitment/training prices are unchanged.
+
+Losing the relevant supplied infrastructure suspends a benefit without deleting knowledge. Restoring it restores the benefit. No discovery gates an existing v7 action. Stage A retains the existing evaluator without an investment/option bonus, providing a diagnostic same-rules baseline for a separately measured policy revision.
+
+New output records:
+
+- Tag 10 has exactly **12 values**: side, id, known, active, goldCost, foodCost, orderCost, prerequisite, prerequisiteMet, town, affordable, eligible. Exactly six rows appear, ordered by side 1/2 then id 1/2/3. Flags are 0/1. Prerequisite is 0 for Charter and 1 for the branches; prerequisiteMet is true for Charter. Town is the lowest infrastructure-qualified tile, or 64 when none exists, independent of knowledge, prerequisite and affordability. Affordable compares current stocks with the stated costs, independent of whose turn it is. Eligible requires the current side, normal ongoing turn, at least one order, trace capacity, unknown discovery, met prerequisite, qualifying town and affordability. It corresponds exactly to a generated research order.
+- Tag 11 has exactly **13 values**: actionIndex, blueKnownMask, redKnownMask, blueActiveMask, redActiveMask, blueGoldIncome, redGoldIncome, blueFoodProduction, redFoodProduction, blueUpkeep, redUpkeep, blueGoldAfter, redGoldAfter. Exactly one record accompanies each legal action, with the same index as tag 5. All fields describe the actual `apply` result, including its turn handoff. Income/production/upkeep describe that resulting board, not another automatically granted income payment. Masks use bits 1, 2, 4 for discoveries 1, 2, 3. Tag 5 continues to provide paid costs, food after, spent orders, troops and supply forecasts.
+
+Active means known and supported by currently supplied qualifying infrastructure. It does **not** promise useful output: farms can be absent, food/gold can hit their caps, and a Muster town can have no room or need for recruitment. UI displays these Fe facts without recomputing eligibility, supply, prices or research effects. Tag 10 is emitted even for completed, boundary-paused and trace-full positions, with eligible false as appropriate. Tags 5 and 11 are absent when there are no legal recordable actions.

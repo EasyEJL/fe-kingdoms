@@ -8,20 +8,25 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parent
 MAX_BODY = 262144
-CURRENT_VERSION = 7
+CURRENT_VERSION = 8
 MAX_ACTIONS = 2048
 DECISION_FIELDS = ('traceIndex','side','kind','from','to','amount','focus','target',
                    'depth','nodes','searchScore','beforeScore','afterScore',
                    'materialDelta','resourcesDelta','supplyDelta','economyDelta',
                    'positionDelta','pressureDelta','focusDelta','terminalDelta',
                    'highlight','orderCost')
+DEVELOPMENT_FIELDS = ('side','id','known','active','goldCost','foodCost','orderCost',
+                      'prerequisite','prerequisiteMet','town','affordable','eligible')
+DEVELOPMENT_PREVIEW_FIELDS = ('actionIndex','blueKnownMask','redKnownMask','blueActiveMask','redActiveMask',
+                             'blueGoldIncome','redGoldIncome','blueFoodProduction','redFoodProduction',
+                             'blueUpkeep','redUpkeep','blueGoldAfter','redGoldAfter')
 
 
 def request_text(data):
     if not isinstance(data, dict) or set(data) - {'version','scenario','mode','difficulty','actions'}:
         raise ValueError('Expected version, scenario, mode, difficulty, and actions only.')
     version, scenario = data.get('version'), data.get('scenario',0)
-    if type(version) is not int or version not in (1,2,3,4,5,6,7):
+    if type(version) is not int or version not in (1,2,3,4,5,6,7,8):
         raise ValueError('Missing or unsupported replay version. Refresh the page for the hex game.')
     if type(scenario) is not int or not 0<=scenario<=2 or (version<3 and scenario!=0):
         raise ValueError('Unsupported map scenario.')
@@ -55,9 +60,12 @@ def decode(text):
             data['version'], data['difficulty'], count = values
             if data['version'] >= 7:
                 data['decisions'] = []
+            if data['version'] == 8:
+                data['developments'] = []
+                data['developmentPreviews'] = []
         elif tag == 1 and version and len(values) == (17 if version >= 5 else 13) and 'state' not in data:
             data['state'] = dict(zip(('side', 'orders', 'turn', 'result', 'gold1', 'gold2', 'quiet', 'lastKind', 'lastFrom', 'lastTo', 'lastAmount', 'nodes', 'depth', 'completedRounds', 'roundLimit', 'decisionPending', 'traceCapacityReached'), values))
-        elif tag == 2 and len(values) == {1:6,2:8,3:11,4:14,5:14,6:14,7:18}.get(version):
+        elif tag == 2 and len(values) == {1:6,2:8,3:11,4:14,5:14,6:14,7:18,8:18}.get(version):
             data['tiles'].append(dict(zip(('index', 'owner', 'troops', 'fort', 'supplied', 'terrain','q','r','settlement','passable','upkeep','infantry','cavalry','siege','defense','specialty','crossingSite','constructedBridge'), values)))
         elif tag == 6 and version >= 2 and len(values) == (11 if version >= 5 else 9) and 'map' not in data:
             limit_key = 'baseRoundLimit' if data.get('version',0) >= 5 else 'maxTurns'
@@ -68,9 +76,13 @@ def decode(text):
             data['supply'].append(dict(zip(('side','connectedOwned','cutOffOwned'),values)))
         elif tag == 9 and version >= 7 and len(values)==len(DECISION_FIELDS) and len(data['decisions'])<2:
             data['decisions'].append(dict(zip(DECISION_FIELDS,values)))
+        elif tag == 10 and version == 8 and len(values)==len(DEVELOPMENT_FIELDS) and len(data['developments'])<6 and values[:2]==[1+len(data['developments'])//3,1+len(data['developments'])%3]:
+            data['developments'].append(dict(zip(DEVELOPMENT_FIELDS,values)))
+        elif tag == 11 and version == 8 and len(values)==len(DEVELOPMENT_PREVIEW_FIELDS) and values[0]==len(data['developmentPreviews']):
+            data['developmentPreviews'].append(dict(zip(DEVELOPMENT_PREVIEW_FIELDS,values)))
         elif tag == 3 and version and len(values) == 4:
             data['legal'].append(values)
-        elif tag == 5 and len(values) == {1:10,2:10,3:14,4:24,5:24,6:28,7:32}.get(version) and values[0] == len(data['previews']):
+        elif tag == 5 and len(values) == {1:10,2:10,3:14,4:24,5:24,6:28,7:32,8:32}.get(version) and values[0] == len(data['previews']):
             data['previews'].append(dict(zip(('index','outcome','cost','sourceTroops','targetTroops','targetOwner','nextSide','nextOrders','result','defense','foodCost','settlementAfter','food1After','food2After','movingInfantry','movingCavalry','movingSiege','attackPower','sourceInfantry','sourceCavalry','sourceSiege','targetInfantry','targetCavalry','targetSiege','blueConnectedAfter','blueCutOffAfter','redConnectedAfter','redCutOffAfter','orderCost','targetSpecialty','targetTerrain','targetPassable'),values)))
         elif tag == 4 and version and len(values) == 5 and values[0] == len(data['actions']):
             data['actions'].append(values[1:])
@@ -79,7 +91,7 @@ def decode(text):
     if data.get('version')==1:
         data['map']=dict(width=5,height=3,count=15,topology=0,scenario=0,blueCapital=0,redCapital=14,orderBudget=2,maxTurns=120)
         for tile in data['tiles']: tile.update(q=tile['index']%5,r=tile['index']//5)
-    if data.get('version') not in (1,2,3,4,5,6,7) or (data.get('version',0) >= 5 and ('traceCapacityReached' not in data.get('state',{}) or 'traceCapacity' not in data.get('map',{}))) or (data.get('version',0) >= 6 and (len(data['supply'])!=2 or any('redCutOffAfter' not in p for p in data['previews']))) or 'state' not in data or 'map' not in data or not 1<=data['map']['count']<=63 or len(data['tiles'])!=data['map']['count'] or [t['index'] for t in data['tiles']]!=list(range(data['map']['count'])) or len(data['actions']) != count or len(data['previews']) != len(data['legal']) or (data.get('version',0)>=3 and len(data['economy'])!=2):
+    if data.get('version') not in (1,2,3,4,5,6,7,8) or (data.get('version',0) >= 5 and ('traceCapacityReached' not in data.get('state',{}) or 'traceCapacity' not in data.get('map',{}))) or (data.get('version',0) >= 6 and (len(data['supply'])!=2 or any('redCutOffAfter' not in p for p in data['previews']))) or 'state' not in data or 'map' not in data or not 1<=data['map']['count']<=63 or len(data['tiles'])!=data['map']['count'] or [t['index'] for t in data['tiles']]!=list(range(data['map']['count'])) or len(data['actions']) != count or len(data['previews']) != len(data['legal']) or (data.get('version',0)>=3 and len(data['economy'])!=2):
         raise RuntimeError('Incomplete native engine response.')
     if data['version'] >= 7:
         decisions=data['decisions']
@@ -97,6 +109,20 @@ def decode(text):
                     or sum(decision[field] for field in DECISION_FIELDS[13:21])!=decision['afterScore']-decision['beforeScore']
                     or [decision[field] for field in ('kind','from','to','amount')]!=data['actions'][index]):
                 raise RuntimeError('Invalid native decision record.')
+    if data['version'] == 8:
+        if len(data['developments'])!=6 or len(data['developmentPreviews'])!=len(data['legal']):
+            raise RuntimeError('Incomplete native development response.')
+        for development in data['developments']:
+            if (any(development[field] not in (0,1) for field in ('known','active','prerequisiteMet','affordable','eligible'))
+                    or development['prerequisite'] not in (0,1)
+                    or not (development['town']==64 or 0<=development['town']<data['map']['count'])
+                    or development['orderCost']<=0
+                    or any(development[field]<0 for field in ('goldCost','foodCost','orderCost'))):
+                raise RuntimeError('Invalid native development record.')
+        for forecast in data['developmentPreviews']:
+            if (any(not 0<=forecast[field]<=7 for field in DEVELOPMENT_PREVIEW_FIELDS[1:5])
+                    or any(forecast[field]<0 for field in DEVELOPMENT_PREVIEW_FIELDS[5:])):
+                raise RuntimeError('Invalid native development forecast.')
     return data
 
 

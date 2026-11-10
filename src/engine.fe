@@ -1,6 +1,6 @@
 use core::marker::Copy
 
-// Crownlines v7 (unreleased). Fe owns every rule and opponent decision.
+// Crownlines v8 (unreleased). Fe owns every rule and opponent decision.
 // Fixed capacities bound memory; scenario metadata selects active map cells.
 const MAX_TILES: usize = 64
 const MAX_ACTIONS: usize = 1024
@@ -18,6 +18,7 @@ struct State {
     settlement: [i64; 64],
     specialty: [i64; 64],
     bridge_mask: usize,
+    developments: [usize; 3],
     gold: [i64; 3],
     food: [i64; 3],
     scenario: usize,
@@ -78,7 +79,52 @@ fn unit_profile(_ role: i64) -> UnitProfile {
 // apply() calls this only for a validated, supplied recruitment/training order.
 fn recruitment_gold(_ s: State, _ tile: usize, _ role: i64, _ supplied: bool) -> i64 {
     unit_profile(role).recruit_gold -
-        if supplied && role > 0 && s.settlement[tile] == 2 && s.specialty[tile] == 2 { 1 } else { 0 }
+        if supplied && role > 0 && s.settlement[tile] == 2 && s.specialty[tile] == 2 { 1 } else { 0 } -
+        if supplied && role == 0 && s.settlement[tile] == 2 && s.specialty[tile] == 2
+            && has_development(s, s.owner[tile], 3) { 1 } else { 0 }
+}
+// Three explicit kingdom discoveries; knowledge never belongs to a captured tile.
+fn development_bit(_ id: i64) -> usize {
+    if id == 1 { 1 } else if id == 2 { 2 } else if id == 3 { 4 } else { 0 }
+}
+fn has_development(_ s: State, _ side: i64, _ id: i64) -> bool {
+    let bit = development_bit(id)
+    if side < 1 || side > 2 || bit == 0 { return false }
+    let player: usize = side.downcast_unchecked()
+    (s.developments[player] / bit) % 2 == 1
+}
+fn development_gold(_ id: i64) -> i64 { 6 }
+fn development_food(_ id: i64) -> i64 { if id == 1 { 0 } else { 2 } }
+fn development_prerequisite(_ id: i64) -> i64 { if id == 1 { 0 } else { 1 } }
+fn development_prerequisite_met(_ s: State, _ side: i64, _ id: i64) -> bool {
+    id == 1 || has_development(s, side, 1)
+}
+// The canonical town depends only on infrastructure, not affordability or knowledge.
+fn development_town(_ s: State, _ side: i64, _ id: i64, _ connected: [bool; 64]) -> usize {
+    for i in 0 .. tile_count(s) {
+        if s.owner[i] == side && connected[i] && s.settlement[i] == 2
+            && (id == 1 || (id == 2 && s.specialty[i] == 1) || (id == 3 && s.specialty[i] == 2)) { return i }
+    }
+    MAX_TILES
+}
+fn active_developments(_ s: State, _ side: i64, _ connected: [bool; 64]) -> usize {
+    var mask: usize = 0
+    for number in 1 .. 4 {
+        let id: i64 = number.downcast_unchecked()
+        if has_development(s, side, id) && development_town(s, side, id, connected) < MAX_TILES {
+            mask += development_bit(id)
+        }
+    }
+    mask
+}
+fn development_affordable(_ s: State, _ side: i64, _ id: i64) -> bool {
+    let player: usize = side.downcast_unchecked()
+    s.gold[player] >= development_gold(id) && s.food[player] >= development_food(id)
+}
+fn can_research(_ s: State, _ side: i64, _ id: i64, _ connected: [bool; 64]) -> bool {
+    s.result == 0 && !s.decision_pending && s.side == side && s.orders >= 1
+        && !has_development(s, side, id) && development_prerequisite_met(s, side, id)
+        && development_town(s, side, id, connected) < MAX_TILES && development_affordable(s, side, id)
 }
 struct Economy {
     gold_income: i64,
@@ -313,7 +359,7 @@ fn initial(_ scenario: usize) -> State {
     assert(scenario <= 2)
     var s = State {
         owner: [0; 64], troops: [0; 64], cavalry: [0; 64], siege: [0; 64], fort: [0; 64], settlement: [0; 64], specialty: [0; 64],
-        bridge_mask: 0, gold: [0, 8, 8], food: [0, 12, 12], scenario,
+        bridge_mask: 0, developments: [0; 3], gold: [0, 8, 8], food: [0, 12, 12], scenario,
         side: 1, orders: 2, turn: 1, result: 0, passes: 0,
         completed_rounds: 0, round_limit: base_round_limit(scenario), decision_pending: false,
     }
@@ -381,15 +427,23 @@ fn economy_with_supply(_ s: State, _ side: i64, _ connected: [bool; 64]) -> Econ
         gold_income: 2, food_production: 3, food_upkeep: 0,
         disconnected: 0, shortage: 0,
     }
+    var farms: i64 = 0
     for i in 0 .. tile_count(s) {
         if s.owner[i] == side {
             if connected[i] {
                 result.gold_income += s.settlement[i]
-                if terrain(s, i) == 1 { result.food_production += 2 }
+                if terrain(s, i) == 1 { result.food_production += 2
+                    farms += 1 }
                 if s.specialty[i] == 1 { result.food_production += 2 }
                 result.food_upkeep += army_upkeep(s.troops[i])
             } else { result.disconnected += 1 }
         }
+    }
+    if has_development(s, side, 1) && development_town(s, side, 1, connected) < MAX_TILES {
+        result.gold_income += 1
+    }
+    if has_development(s, side, 2) && development_town(s, side, 2, connected) < MAX_TILES {
+        result.food_production += imin(farms, 2)
     }
     let player: usize = side.downcast_unchecked()
     let available = imin(RESOURCE_CAP, s.food[player] + result.food_production)
@@ -454,10 +508,17 @@ fn legal(_ s: State) -> Actions {
     let player: usize = s.side.downcast_unchecked()
     with (Actions = result) {
         add(pass())
+        for number in 1 .. 4 {
+            let id: i64 = number.downcast_unchecked()
+            if can_research(s, s.side, id, connected) {
+                let town = development_town(s, s.side, id, connected)
+                add(Action { kind: 13, from: town, to: town, amount: id })
+            }
+        }
         for i in 0 .. tile_count(s) {
             if s.owner[i] == s.side && passable(s, i) {
                 if connected[i] {
-                    if s.gold[player] >= unit_profile(0).recruit_gold && s.food[player] >= unit_profile(0).recruit_food && s.troops[i] <= MAX_TROOPS - unit_profile(0).recruit_count
+                    if s.gold[player] >= recruitment_gold(s, i, 0, true) && s.food[player] >= unit_profile(0).recruit_food && s.troops[i] <= MAX_TROOPS - unit_profile(0).recruit_count
                         && (terrain(s, i) == 4 || s.settlement[i] > 0) {
                         add(Action { kind: 2, from: i, to: i, amount: 2 })
                     }
@@ -565,7 +626,7 @@ fn apply(_ before: State, _ action: Action) -> State {
         s.orders -= order_cost(before, action)
         if action.kind == 2 {
             let profile = unit_profile(0)
-            s.gold[player] -= profile.recruit_gold
+            s.gold[player] -= recruitment_gold(s, action.from, 0, true)
             s.food[player] -= profile.recruit_food
             s.troops[action.from] += profile.recruit_count
         } else if action.kind == 3 {
@@ -586,6 +647,10 @@ fn apply(_ before: State, _ action: Action) -> State {
             s.gold[player] -= 6
             s.food[player] -= 2
             s.specialty[action.from] = action.amount
+        } else if action.kind == 13 {
+            s.gold[player] -= development_gold(action.amount)
+            s.food[player] -= development_food(action.amount)
+            s.developments[player] += development_bit(action.amount)
         } else if action.kind == 12 {
             s.gold[player] -= 6
             s.food[player] -= 2

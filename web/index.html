@@ -15,7 +15,7 @@
 <div class="toolbar">
 <label for="scenario">Map</label><select id="scenario"><option value="0">Small 5 x 3</option><option value="1">Medium 7 x 5</option><option value="2">Large 9 x 5</option></select>
 <label for="difficulty">Computer</label><select id="difficulty"><option value="0">Easy</option><option value="1">Hard</option></select>
-<button id="new">New game</button><button id="save" disabled>Save replay</button><button id="load">Load replay</button><button id="resume">Resume campaign</button><button id="rivers" hidden>View v6 river replay</button><button id="rounds" hidden>View v5 campaign replay</button><button id="roles" hidden>View v4 mixed-army replay</button><button id="campaign" hidden>View v3 campaign replay</button><button id="previous" hidden>View v2 hex replay</button><button id="legacy" hidden>View v1 square replay</button>
+<button id="new">New game</button><button id="save" disabled>Save replay</button><button id="load">Load replay</button><button id="resume">Resume campaign</button><button id="frontiers" hidden>View v7 frontier replay</button><button id="rivers" hidden>View v6 river replay</button><button id="rounds" hidden>View v5 campaign replay</button><button id="roles" hidden>View v4 mixed-army replay</button><button id="campaign" hidden>View v3 campaign replay</button><button id="previous" hidden>View v2 hex replay</button><button id="legacy" hidden>View v1 square replay</button>
 <input class="file" id="file" type="file" accept=".json,application/json">
 </div>
 <details id="snapshots"><summary>Named campaign snapshots</summary>
@@ -32,11 +32,12 @@
 <div id="human-activity" class="muted" aria-live="polite"></div><div id="activity" class="muted" aria-live="polite"></div>
 <div id="error" class="error" role="alert"></div>
 <div id="status" class="status" aria-live="polite"></div><div id="economy" class="muted" aria-live="polite"></div><p id="supply" class="muted" aria-live="polite" hidden></p>
+<details id="developments" hidden><summary>Kingdom developments</summary><p>Permanent knowledge belongs to the kingdom, not the town: capture does not transfer it. Benefits can be suspended when the required infrastructure loses supply. Active means the infrastructure is supplied, not that it currently adds useful output. Fe reports all costs, prerequisites and eligibility below; actual research orders appear under your territories.</p><div id="development-list"></div></details>
 <div class="panel" style="margin-bottom:16px"><strong id="goal">Capture Red's capital. Keep your capital safe.</strong><p id="turn-guide" aria-live="polite"></p><p id="opening-hint" class="muted"></p><small id="order-guide">TWO orders total across your whole kingdom, not per territory. Selecting tiles is free. You can use the same territory twice. Check each Fe order cost: some moves use both orders. Spend your orders, then press Run computer turn.</small></div><div class="layout">
-<section><div class="map-shell"><div class="map-tools"><strong>Kingdom map</strong><button id="zoom-out" aria-label="Zoom map out">-</button><output id="zoom-label" aria-live="polite">100%</output><button id="zoom-in" aria-label="Zoom map in">+</button><button id="zoom-fit">Fit map</button><button id="zoom-reset">100%</button></div><div id="map-scroll" class="map-scroll" tabindex="0" aria-label="Scrollable kingdom map" aria-describedby="map-help"><div id="map-stage" class="map-stage"><div id="board" class="board" aria-label="Kingdom map"></div></div></div></div><p id="map-help" class="muted map-help">Zoom for detail, scroll to explore. Tab to a hex and press Enter to inspect it. Arrow keys scroll the focused map.</p><div class="legend"><span class="blue-text">BLUE / you</span> | <span class="red-text">RED / computer</span> | N / neutral<br>Number badges count each troop role. CUT OFF means disconnected from the capital. <span id="terrain-guide">Current v7: forests protect infantry; check the Fe forecast for each moving force and its order cost.</span> Gold edges mark the last order, dark edges the selection.<div id="role-legend" class="role-legend"></div></div><div id="search" class="muted"></div></section>
+<section><div class="map-shell"><div class="map-tools"><strong>Kingdom map</strong><button id="zoom-out" aria-label="Zoom map out">-</button><output id="zoom-label" aria-live="polite">100%</output><button id="zoom-in" aria-label="Zoom map in">+</button><button id="zoom-fit">Fit map</button><button id="zoom-reset">100%</button></div><div id="map-scroll" class="map-scroll" tabindex="0" aria-label="Scrollable kingdom map" aria-describedby="map-help"><div id="map-stage" class="map-stage"><div id="board" class="board" aria-label="Kingdom map"></div></div></div></div><p id="map-help" class="muted map-help">Zoom for detail, scroll to explore. Tab to a hex and press Enter to inspect it. Arrow keys scroll the focused map.</p><div class="legend"><span class="blue-text">BLUE / you</span> | <span class="red-text">RED / computer</span> | N / neutral<br>Number badges count each troop role. CUT OFF means disconnected from the capital. <span id="terrain-guide">Current v8: forests protect infantry; check the Fe forecast for each moving force and its order cost.</span> Gold edges mark the last order, dark edges the selection.<div id="role-legend" class="role-legend"></div></div><div id="search" class="muted"></div></section>
 <aside class="panel"><h2 id="action-title">Your territories</h2><p id="selection-help" class="muted">Open one territory below or select it on the map.</p><p id="territory-detail" class="muted"></p><div id="global-actions" class="global-orders"></div><div id="actions"></div></aside>
 </div>
-<details><summary>Current v7 rules and strategy basics</summary><ul>
+<details><summary>Current v8 rules and strategy basics</summary><ul>
 <li>You command Blue. Each side takes two orders per turn. Select a territory, then choose an order supplied by Fe and check its order cost. These are two orders TOTAL across your kingdom, not per territory. Selecting tiles is free. End my turn forfeits your remaining orders. An order can use one or two of that budget. Once your budget is spent or you End my turn, press Run computer turn to let Red act.</li>
 <li>Move either half your troops (rounded down) or all but one to an edge-adjacent hex (up to six neighbors). Friendly territories combine troops and preserve their composition, up to 12 total. Fe reserves one garrison (infantry first, otherwise cavalry, otherwise siege) and chooses the moving composition proportionally from the rest; inspect the forecast before committing. Every departing army retains at least one garrison. Newly built bridges begin neutral and empty. A detachment containing siege uses 2 orders to move anywhere; cavalry uses 2 to enter a forest. Other moves use 1. Mixed forces pay the highest cost among the troops actually moving, never more than 2.</li>
 <li>Base recruitment prices: 2 infantry for 3 gold and 2 food at a supplied capital, village or town. Supplied towns can recruit cavalry (1 for 4 gold and 2 food) or siege (1 for 5 gold and 3 food). A supplied town with at least one infantry can also Train it into cavalry or siege for the same cost and one order. Training converts the infantry and leaves the total troop count unchanged, including in a full stack. Fortify for 2 gold (maximum fort level 2). Build a village for 6 gold, then upgrade it to a town for 8 gold; each costs one order. A supplied town may choose one permanent specialty for 6 gold, 2 food and 1 order: Granary adds 2 food production per turn; Arsenal reduces cavalry/siege recruitment and paid training by 1 gold. Cut-off towns keep their specialty but receive no benefit; capture preserves it. Read Fe forecasts for actual local costs. Only orders allowed by Fe are shown.</li>
@@ -44,7 +45,7 @@
 <li>Supply follows owned passable hexes to your capital. Mountains and rivers block it; fixed and built bridges carry movement and supply through owned connected territory; occupied bridges add 1 defense. From a supplied adjacent owned land bank, build a permanent bridge at a designated site for 6 gold, 2 food and 1 order. It starts neutral and empty, with 0 defense. Either side can occupy it; construction does not claim the tile or automatically connect supply. Supply counts above show owned territories connected to the capital or cut off; preview changes can include newly captured territories, not just reconnections. At the start of your turn, gain 2 gold plus the level of each supplied settlement, and 3 food plus 2 for each supplied farm. Gold and food are capped at 40. Food production is added and capped BEFORE upkeep is paid, so some production can be wasted at full storage. The projected food amount above comes directly from Fe. Villages are level 1 and towns level 2.</li><li>Supplied armies consume food for mobile troops: one food per started group of three troops above the lone garrison. Fe shows production, upkeep, net food and projected shortage losses above the map. A food shortage removes mobile troops from the largest armies. Cut-off territories instead lose one troop, to a minimum of one; they do not consume your central food.</li>
 <li>Capture the enemy capital to win immediately. Four consecutive end-turn orders end the match in a draw. Small, medium and large maps initially allow 60, 120 and 180 complete rounds respectively. At the round limit, choose to extend by 20 rounds or accept a draw. The choice is recorded in the replay. A full replay pauses play for export; it does not declare a draw. All maps use the same two-order budget. Any non-pass order resets the consecutive-pass count.</li>
 <li>Easy uses greedy one-ply evaluation. Hard uses four-ply beam alpha-beta search. Both use identical rules and resources, with no hidden bonuses. Select difficulty before a new game.</li>
-<li>New games use forest-frontier campaign rules version 7. Version 1 square, version 2 hex, version 3 campaign, version 4 mixed-army, version 5 campaign and version 6 river replays can be viewed read-only and are never silently converted. Save replay downloads the full deterministic move record. Load replay validates it with Fe. A local checkpoint is saved only after a successful response. Export a replay before replacing a game if you want to keep it.</li>
+<li>New games use kingdom-development campaign rules version 8. Version 1 square, version 2 hex, version 3 campaign, version 4 mixed-army, version 5 campaign and version 6 river and version 7 frontier replays can be viewed read-only and are never silently converted. Save replay downloads the full deterministic move record. Load replay validates it with Fe. A local checkpoint is saved only after a successful response. Export a replay before replacing a game if you want to keep it.</li>
 </ul></details>
 <details><summary>Recent orders</summary><div id="log"></div></details>
 <script>
@@ -54,16 +55,39 @@ const terrain=['Plain','Farm','Town','Hill','Capital','Mountain','Terrain 6','Pa
 const terrainLabel=t=>t.constructedBridge?'Built bridge':t.crossingSite?'Bridge site':terrain[t.terrain];
 const settlementNames=['None','Village','Town'];
 const specialtyNames=['None','Granary','Arsenal'];
+const developmentNames=['None','Town Charter','Crop Rotation','Organized Muster'];
+const developmentName=id=>developmentNames[id]||('Development '+id);
+const developmentEffect=id=>id===1?'Adds 1 kingdom gold income while any town is supplied.':id===2?'Adds 1 food per supplied farm, capped at 2 extra food, while a supplied Granary exists.':id===3?'Infantry recruitment at a supplied Arsenal costs 2 gold instead of 3; food cost, headcount and order cost are unchanged.':'';
+function renderDevelopments(){
+ const rows=game?.version>=8?game.developments||[]:[];
+ $('developments').hidden=!rows.length;$('development-list').replaceChildren();
+ for(const d of rows){
+  const row=document.createElement('p');row.className='muted';
+  row.textContent=names[d.side]+' | '+developmentName(d.id)+': '+(d.known?'Known; benefit '+(d.active?'active':'suspended'):'Not researched')+'. '+developmentEffect(d.id);
+  row.textContent+=' Prerequisite: '+developmentName(d.prerequisite)+' ('+(d.prerequisiteMet?'met':'not met')+'). Fe cost: '+d.goldCost+' gold, '+d.foodCost+' food, '+d.orderCost+' '+(d.orderCost===1?'order':'orders')+'. Research site: '+(d.town===64?'no qualifying supplied town':place(d.town))+'. Affordable: '+(d.affordable?'yes':'no')+'. Eligible now: '+(d.eligible?'yes':'no')+' (Fe).';
+  $('development-list').append(row);
+ }
+}
+function developmentPreview(a){
+ if(game?.version<8)return undefined;
+ const index=game.legal.findIndex(legal=>legal.length===a.length&&legal.every((value,i)=>value===a[i]));
+ return game.developmentPreviews?.find(p=>p.actionIndex===index);
+}
+function developmentForecast(p){
+ if(!p||game?.version<8)return '';
+ const list=mask=>[1,2,3].filter(id=>mask&(1<<(id-1))).map(developmentName).join(', ')||'none';
+ return ' Fe kingdom afterstate: '+[['Blue','blue'],['Red','red']].map(([label,prefix])=>label+' known '+list(p[prefix+'KnownMask'])+'; active '+list(p[prefix+'ActiveMask'])+'; '+p[prefix+'GoldAfter']+' gold stored; '+p[prefix+'GoldIncome']+' gold income, '+p[prefix+'FoodProduction']+' food production, '+p[prefix+'Upkeep']+' food upkeep').join(' | ')+'.';
+}
 const specialtyEffect=value=>value===1?'+2 food production per turn while supplied.':value===2?'Cavalry/siege recruitment and paid training cost 1 less gold while supplied.':'';
 const specialtyDetail=t=>t.specialty?'Specialty: '+specialtyNames[t.specialty]+' (permanent). '+specialtyEffect(t.specialty)+(t.supplied?'':' Benefit inactive: town is cut off.')+' Capture preserves this choice.':'';
 const names=['Neutral','Blue','Red'];
 let game=null, selected=null, busy=false, mapZoom=1;
-const CURRENT_VERSION=7, CHECKPOINT='fe-kingdoms-v7', RIVERS_CHECKPOINT='fe-kingdoms-v6', ROUNDS_CHECKPOINT='fe-kingdoms-v5', ROLES_CHECKPOINT='fe-kingdoms-v4', CAMPAIGN_CHECKPOINT='fe-kingdoms-v3', PREVIOUS_CHECKPOINT='fe-kingdoms-v2', LEGACY_CHECKPOINT='fe-kingdoms-v1';
-const SNAPSHOTS='fe-kingdoms-v7-slots-v1';
+const CURRENT_VERSION=8, CHECKPOINT='fe-kingdoms-v8', FRONTIERS_CHECKPOINT='fe-kingdoms-v7', RIVERS_CHECKPOINT='fe-kingdoms-v6', ROUNDS_CHECKPOINT='fe-kingdoms-v5', ROLES_CHECKPOINT='fe-kingdoms-v4', CAMPAIGN_CHECKPOINT='fe-kingdoms-v3', PREVIOUS_CHECKPOINT='fe-kingdoms-v2', LEGACY_CHECKPOINT='fe-kingdoms-v1';
+const SNAPSHOTS='fe-kingdoms-v8-slots-v1';
 // BEGIN PRACTICE CATALOG
 const PRACTICE_DEMOS=[
- {"id":"shared-crossing","title":"A bridge for whom?","prompt":"Build C3 from B3: the new crossing starts neutral and empty, and either side can use it. Compare occupying it with holding your position, then run Red. Check the Fe forecasts; neither choice is claimed to be best.","source":"Prepared from docs/playtests/v7-sol-small.json, first 27 actions. Model-selected Blue and native Fe Red; not human playtesting or an injected state.","replay":{"version":7,"scenario":0,"difficulty":0,"actions":[[1,0,1,5],[1,1,6,7],[2,9,9,2],[2,9,9,2],[4,6,6,2],[3,6,6,1],[1,9,8,4],[2,8,8,2],[11,6,6,2],[1,6,11,2],[1,8,3,3],[2,8,8,2],[2,6,6,2],[5,6,6,1],[2,8,8,2],[1,8,7,4],[6,6,6,1],[0,0,0,0],[2,8,8,2],[2,8,8,2],[2,6,6,2],[2,6,6,2],[2,8,8,2],[2,8,8,2],[1,6,7,10],[4,3,3,1],[1,14,9,5]]}},
- {"id":"mixed-siege","title":"Bring the siege, or keep an order?","prompt":"Inspect B2 to C2. Moving 10 includes siege and uses both orders; moving 5 leaves siege behind and keeps an order. Compare Fe's moving forces and survivors, then try the remaining fortify choice after the smaller attack. Neither choice is claimed to be best.","source":"Prepared from docs/playtests/v7-sol-small.json, first 24 actions. Model-selected Blue and native Fe Red; not human playtesting or an injected state.","replay":{"version":7,"scenario":0,"difficulty":0,"actions":[[1,0,1,5],[1,1,6,7],[2,9,9,2],[2,9,9,2],[4,6,6,2],[3,6,6,1],[1,9,8,4],[2,8,8,2],[11,6,6,2],[1,6,11,2],[1,8,3,3],[2,8,8,2],[2,6,6,2],[5,6,6,1],[2,8,8,2],[1,8,7,4],[6,6,6,1],[0,0,0,0],[2,8,8,2],[2,8,8,2],[2,6,6,2],[2,6,6,2],[2,8,8,2],[2,8,8,2]]}}
+ {"id":"shared-crossing","title":"A bridge for whom?","prompt":"Build C3 from B3: the new crossing starts neutral and empty, and either side can use it. Compare occupying it with holding your position, then run Red. Check the Fe forecasts; neither choice is claimed to be best.","source":"V8-derived prepared example: the first 27 actions from docs/playtests/v7-sol-small.json, revalidated under v8 rules. Source match used model-selected Blue and native Fe Red under v7; this is not a recorded v8 match, human playtest or injected state.","replay":{"version":8,"scenario":0,"difficulty":0,"actions":[[1,0,1,5],[1,1,6,7],[2,9,9,2],[2,9,9,2],[4,6,6,2],[3,6,6,1],[1,9,8,4],[2,8,8,2],[11,6,6,2],[1,6,11,2],[1,8,3,3],[2,8,8,2],[2,6,6,2],[5,6,6,1],[2,8,8,2],[1,8,7,4],[6,6,6,1],[0,0,0,0],[2,8,8,2],[2,8,8,2],[2,6,6,2],[2,6,6,2],[2,8,8,2],[2,8,8,2],[1,6,7,10],[4,3,3,1],[1,14,9,5]]}},
+ {"id":"mixed-siege","title":"Bring the siege, or keep an order?","prompt":"Inspect B2 to C2. Moving 10 includes siege and uses both orders; moving 5 leaves siege behind and keeps an order. Compare Fe's moving forces and survivors, then try the remaining fortify choice after the smaller attack. Neither choice is claimed to be best.","source":"V8-derived prepared example: the first 24 actions from docs/playtests/v7-sol-small.json, revalidated under v8 rules. Source match used model-selected Blue and native Fe Red under v7; this is not a recorded v8 match, human playtest or injected state.","replay":{"version":8,"scenario":0,"difficulty":0,"actions":[[1,0,1,5],[1,1,6,7],[2,9,9,2],[2,9,9,2],[4,6,6,2],[3,6,6,1],[1,9,8,4],[2,8,8,2],[11,6,6,2],[1,6,11,2],[1,8,3,3],[2,8,8,2],[2,6,6,2],[5,6,6,1],[2,8,8,2],[1,8,7,4],[6,6,6,1],[0,0,0,0],[2,8,8,2],[2,8,8,2],[2,6,6,2],[2,6,6,2],[2,8,8,2],[2,8,8,2]]}}
 ];
 // END PRACTICE CATALOG
 let practiceSession=null;
@@ -205,7 +229,7 @@ $('zoom-in').onclick=()=>zoomMap(mapZoom+.15);$('zoom-out').onclick=()=>zoomMap(
 $('zoom-fit').onclick=()=>{zoomMap((($('map-scroll').clientWidth||600)-36)/parseFloat($('board').style.width||600));$('map-scroll').scrollLeft=0;$('map-scroll').scrollTop=0;};
 for(const kind of ['infantry','cavalry','siege']){const label=document.createElement('span');label.append(icon(kind));const text=document.createElement('span');text.textContent=kind[0].toUpperCase()+kind.slice(1);label.append(text);$('role-legend').append(label);}
 function payload(mode,actions){return {version:game.version,scenario:game.map?.scenario??0,mode,difficulty:game.difficulty,actions};}
-const actionName=a=>a[0]===0?'End turn':a[0]===1?'Move '+a[3]+' troops: '+place(a[1])+' -> '+place(a[2]):a[0]===2?'Recruit +2 '+(game&&game.version>=4?'infantry':'troops')+' at '+place(a[1]):a[0]===3?'Fortify '+place(a[1]):a[0]===4?(a[3]===1?'Build village at ':'Upgrade to town at ')+place(a[1]):a[0]===5?'Recruit +1 cavalry at '+place(a[1]):a[0]===6?'Recruit +1 siege at '+place(a[1]):a[0]===7?'Train 1 infantry -> cavalry at '+place(a[1]):a[0]===8?'Train 1 infantry -> siege at '+place(a[1]):a[0]===9?'Extend by '+mapInfo().extensionRounds+' rounds':a[0]===10?'Accept draw':a[0]===11?'Specialize '+place(a[1])+' as '+specialtyNames[a[3]]+' (permanent choice)':a[0]===12?'Build shared bridge: '+place(a[1])+' -> '+place(a[2])+' (permanent)':'Unknown order';
+const actionName=a=>a[0]===0?'End turn':a[0]===1?'Move '+a[3]+' troops: '+place(a[1])+' -> '+place(a[2]):a[0]===2?'Recruit +2 '+(game&&game.version>=4?'infantry':'troops')+' at '+place(a[1]):a[0]===3?'Fortify '+place(a[1]):a[0]===4?(a[3]===1?'Build village at ':'Upgrade to town at ')+place(a[1]):a[0]===5?'Recruit +1 cavalry at '+place(a[1]):a[0]===6?'Recruit +1 siege at '+place(a[1]):a[0]===7?'Train 1 infantry -> cavalry at '+place(a[1]):a[0]===8?'Train 1 infantry -> siege at '+place(a[1]):a[0]===9?'Extend by '+mapInfo().extensionRounds+' rounds':a[0]===10?'Accept draw':a[0]===11?'Specialize '+place(a[1])+' as '+specialtyNames[a[3]]+' (permanent choice)':a[0]===12?'Build shared bridge: '+place(a[1])+' -> '+place(a[2])+' (permanent)':a[0]===13?'Research '+developmentName(a[3])+' at '+place(a[1])+' (kingdom knowledge)':'Unknown order';
 function forecastText(a,p,done=false){
  if(!p)return 'Fe will validate this order.';
  if(p.result===3)return done?'Match ended in a draw. No further turns.':'Ends the match in a draw. No further turns.';
@@ -221,10 +245,11 @@ function forecastText(a,p,done=false){
  if(p.outcome===5)return p.cost+' gold. '+(done?'Added':'Adds')+' 1 fort level to this territory.';
  if(p.outcome===8)return p.cost+' gold'+(p.foodCost!==undefined?', '+p.foodCost+' food':'')+'. '+(done?'Built':'Would build')+' a permanent shared crossing at '+place(a[2])+'. Fe target after: '+(p.targetTerrain===9?'Bridge':terrain[p.targetTerrain])+', '+(p.targetPassable?'passable':'impassable')+', '+names[p.targetOwner]+', '+p.targetTroops+' troops. Either side can occupy it. Construction does not claim it or automatically connect supply.';
  if(p.outcome===7)return p.cost+' gold'+(p.foodCost!==undefined?', '+p.foodCost+' food':'')+'. '+(done?'Specialized':'Would specialize')+' this town as '+specialtyNames[p.targetSpecialty]+' (permanent choice; cannot replace). '+specialtyEffect(p.targetSpecialty)+' Capture preserves this choice.';
+ if(p.outcome===9)return p.cost+' gold, '+p.foodCost+' food. '+(done?'Researched ':'Would research ')+developmentName(a[3])+'. Permanent kingdom knowledge; capture does not transfer it. Supply-conditioned benefits are reported by Fe.';
  if(p.outcome===6)return p.cost+' gold'+(p.foodCost?', '+p.foodCost+' food':'')+'. '+(done?'Settlement is now ':'Would become ')+(settlementNames[p.settlementAfter]??('level '+p.settlementAfter))+'.';
  return '';
 }
-function forecast(a,p,done=false){
+function forecast(a,p,done=false,development){
  let text=forecastText(a,p,done);
  if(!p)return text;
  if(a[0]===1&&p.movingInfantry!==undefined){
@@ -235,7 +260,7 @@ function forecast(a,p,done=false){
  if(p.targetInfantry!==undefined&&a[0]!==0)text+=' Target after: '+composition(p.targetInfantry,p.targetCavalry,p.targetSiege)+'.';
  if(game?.version>=7&&p.orderCost!==undefined&&!isDecision(a)&&a[0]!==0){text+=' '+(done?'Used ':'Order cost: ')+p.orderCost+' '+(p.orderCost===1?'order':'orders')+'.';if(!p.result&&p.nextSide!==undefined&&p.nextOrders!==undefined)text+=' Fe afterstate: '+names[p.nextSide]+' turn, '+p.nextOrders+' '+(p.nextOrders===1?'order':'orders')+' remaining.';}
  if(!done&&game?.version>=7&&a[0]===1&&p.orderCost===2&&p.outcome===2&&!p.result&&p.nextSide===2)text+=' Uses both orders; no order remains to fortify after capture.';
- return text+supplyForecast(p,done);
+ return text+supplyForecast(p,done)+developmentForecast(done?development:developmentPreview(a));
 }
 function supplyForecast(p,done=false){
  if(!p||game?.version<6)return '';
@@ -284,7 +309,7 @@ function actionButton(a,index){
 function selectTerritory(index,focusId){if(busy)return;selected=selected===index?null:index;render();if(focusId)$(focusId)?.focus({preventScroll:true});}
 function render(){
  if(!game)return;
- renderPractice();
+ renderPractice();renderDevelopments();
  const s=game.state,m=mapInfo(),budget=m.orderBudget||2,legacy=readOnly();
  $('terrain-guide').textContent=game.version>=7?'Mountains and rivers block movement and supply; cross at fixed bridges or build shared crossings at marked sites. Built bridges start neutral and empty; occupied bridges add 1 defense. Forest adds 1 defense with defending infantry. Moving siege uses 2 orders anywhere; cavalry uses 2 entering forest. Check Fe forecasts for the actual detachment and cost.':game.version>=6?'Mountains and rivers block movement and supply; route around mountains and cross rivers at fixed bridges. Bridges add 1 defense.':game.version===1?'Original square-map rules. Inspect tiles and export this read-only replay.':game.version===2?'Original hex-map rules. Inspect tiles and export this read-only replay.':'Mountains block movement and supply; passes cross the ridge. Original v'+game.version+' campaign rules.';
  $('difficulty').value=String(game.difficulty);
@@ -365,7 +390,7 @@ function perform(a,p){
  if(a[0]===10&&!confirm('Accept a draw and end this match? This decision will be recorded in the replay.'))return Promise.resolve(false);
  if(a[0]===0&&!confirm('End your turn now and give up '+game.state.orders+' remaining '+(game.state.orders===1?'order':'orders')+'?'))return Promise.resolve(false);
  if(p&&p.outcome===3&&!confirm(forecast(a,p)+' Send this attack anyway?'))return Promise.resolve(false);
- return request(payload(1,[...game.actions,a]),false,{kind:'human',action:a,preview:p});
+ return request(payload(1,[...game.actions,a]),false,{kind:'human',action:a,preview:p,development:developmentPreview(a)});
 }
 async function request(payload, resetSelection=false, feedback={},locked=false){
  if(busy&&!locked)return false;setBusy(true);$('error').textContent='';$('notice').textContent=payload.mode===0&&payload.actions.length?'Red is planning its orders...':'Fe is checking your order...';
@@ -379,7 +404,7 @@ async function request(payload, resetSelection=false, feedback={},locked=false){
   render();if(!feedback.skipCheckpoint)checkpoint();$('notice').textContent='';
   if(feedback.kind==='human'){
    if(isDecision(feedback.action))$('activity').textContent='';
-   $('human-activity').textContent='Your last order: '+actionName(feedback.action)+'. '+forecast(feedback.action,feedback.preview,true);
+   $('human-activity').textContent='Your last order: '+actionName(feedback.action)+'. '+forecast(feedback.action,feedback.preview,true,feedback.development);
    if(game.state.side===2&&!game.state.result&&!paused()&&!isDecision(feedback.action)&&feedback.action[0]!==0)$('turn-guide').textContent='You used both orders. Review the board, then press Run computer turn. Red has not moved yet.';
   }
   const computerActions=payload.mode===0?data.actions.slice(payload.actions.length):[];
@@ -392,7 +417,7 @@ async function request(payload, resetSelection=false, feedback={},locked=false){
 }
 function load(text,locked=false){
  if(busy&&!locked)return Promise.resolve(false);
- try{const data=JSON.parse(text);if(!data||![1,2,3,4,5,6,7].includes(data.version))throw Error('Unsupported replay version.');if(!maySwitch(data))return Promise.resolve(false);return request({version:data.version,scenario:data.scenario??0,mode:1,difficulty:data.difficulty,actions:data.actions},true,{session:null},locked);}
+ try{const data=JSON.parse(text);if(!data||![1,2,3,4,5,6,7,8].includes(data.version))throw Error('Unsupported replay version.');if(!maySwitch(data))return Promise.resolve(false);return request({version:data.version,scenario:data.scenario??0,mode:1,difficulty:data.difficulty,actions:data.actions},true,{session:null},locked);}
  catch(e){$('error').textContent='Cannot load replay: '+e.message;return Promise.resolve(false);}
 }
 $('new').onclick=()=>{
@@ -416,7 +441,7 @@ function loadCheckpoint(key){
  try{const text=localStorage.getItem(key);if(text===null){$('error').textContent='No saved replay found in this browser.';return Promise.resolve(false);}return load(text);}
  catch(e){storageWarning('checkpoint','Cannot read saved replay: '+e.message+'. Existing data was preserved.');return Promise.resolve(false);}
 }
-for(const [id,key] of [['resume',CHECKPOINT],['rivers',RIVERS_CHECKPOINT],['rounds',ROUNDS_CHECKPOINT],['roles',ROLES_CHECKPOINT],['campaign',CAMPAIGN_CHECKPOINT],['previous',PREVIOUS_CHECKPOINT],['legacy',LEGACY_CHECKPOINT]])$(id).onclick=()=>loadCheckpoint(key);
+for(const [id,key] of [['resume',CHECKPOINT],['frontiers',FRONTIERS_CHECKPOINT],['rivers',RIVERS_CHECKPOINT],['rounds',ROUNDS_CHECKPOINT],['roles',ROLES_CHECKPOINT],['campaign',CAMPAIGN_CHECKPOINT],['previous',PREVIOUS_CHECKPOINT],['legacy',LEGACY_CHECKPOINT]])$(id).onclick=()=>loadCheckpoint(key);
 $('snapshot-save').onclick=()=>changeSnapshot('save');
 $('snapshot-replace').onclick=()=>changeSnapshot('replace');
 $('snapshot-delete').onclick=()=>changeSnapshot('delete');
@@ -431,7 +456,8 @@ $('practice-list').value=PRACTICE_DEMOS[0].id;
 $('practice-start').onclick=()=>startPractice();
 $('practice-reset').onclick=()=>startPractice(true);
 $('practice-return').onclick=returnFromPractice;
-let saved=false,storageReadable=true,oldSaved=false,previousSaved=false,campaignSaved=false,rolesSaved=false,roundsSaved=false,riversSaved=false;try{saved=localStorage.getItem(CHECKPOINT)!==null;riversSaved=!!localStorage.getItem(RIVERS_CHECKPOINT);roundsSaved=!!localStorage.getItem(ROUNDS_CHECKPOINT);rolesSaved=!!localStorage.getItem(ROLES_CHECKPOINT);oldSaved=!!localStorage.getItem(LEGACY_CHECKPOINT);previousSaved=!!localStorage.getItem(PREVIOUS_CHECKPOINT);campaignSaved=!!localStorage.getItem(CAMPAIGN_CHECKPOINT);}catch(e){storageReadable=false;storageWarning('checkpoint','Cannot read browser storage: '+e.message+'. Automatic startup is paused to preserve existing data.');}
+let saved=false,frontiersSaved=false,storageReadable=true,oldSaved=false,previousSaved=false,campaignSaved=false,rolesSaved=false,roundsSaved=false,riversSaved=false;try{saved=localStorage.getItem(CHECKPOINT)!==null;frontiersSaved=!!localStorage.getItem(FRONTIERS_CHECKPOINT);riversSaved=!!localStorage.getItem(RIVERS_CHECKPOINT);roundsSaved=!!localStorage.getItem(ROUNDS_CHECKPOINT);rolesSaved=!!localStorage.getItem(ROLES_CHECKPOINT);oldSaved=!!localStorage.getItem(LEGACY_CHECKPOINT);previousSaved=!!localStorage.getItem(PREVIOUS_CHECKPOINT);campaignSaved=!!localStorage.getItem(CAMPAIGN_CHECKPOINT);}catch(e){storageReadable=false;storageWarning('checkpoint','Cannot read browser storage: '+e.message+'. Automatic startup is paused to preserve existing data.');}
+$('frontiers').hidden=!frontiersSaved;
 $('rivers').hidden=!riversSaved;
 $('rounds').hidden=!roundsSaved;
 $('roles').hidden=!rolesSaved;

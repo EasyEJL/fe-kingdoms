@@ -74,11 +74,15 @@ class V7ReplayTests(unittest.TestCase):
                 response=self.responses[name]
                 self.assertEqual(tuple(response['state'][field] for field in STATE_FIELDS),expected['state'])
                 self.assertEqual(response['state']['nodes'],0)
-                self.assertTrue(response['legal'],'These saved campaigns remain playable, not completed.')
+                self.assertTrue(response['legal'],'These engine positions are ongoing, not completed.')
                 self.assertEqual(tuple(tuple(row[field] for field in ECONOMY_FIELDS) for row in response['economy']),expected['economy'])
                 self.assertEqual(tuple(tuple(row[field] for field in ('side','connectedOwned','cutOffOwned')) for row in response['supply']),expected['supply'])
                 self.assertEqual([(t['index'],t['owner'],t['specialty']) for t in response['tiles'] if t['specialty']],expected['specialties'])
                 self.assertEqual([(t['index'],t['owner'],t['troops']) for t in response['tiles'] if t['constructedBridge']],expected['bridges'])
+
+    def test_frozen_v7_cannot_run_new_automatic_orders(self):
+        for fixture in self.fixtures.values():
+            with self.assertRaises(ValueError):game(dict(fixture,mode=0))
 
 
 if __name__=='__main__':unittest.main()

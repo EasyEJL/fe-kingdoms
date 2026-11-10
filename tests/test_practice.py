@@ -7,7 +7,7 @@ import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from server import game
+from server import CURRENT_VERSION,game
 
 PREFIXES={'shared-crossing':27,'mixed-siege':24}
 SOURCE='docs/playtests/v7-sol-small.json'
@@ -53,8 +53,8 @@ class PracticeTests(unittest.TestCase):
         for name,prefix in PREFIXES.items():
             replay=cls.demos[name]['replay']
             # Check exact provenance and bound the trace before invoking native Fe.
-            if replay!=dict(source,actions=source['actions'][:prefix]):
-                raise AssertionError(f'{name}: catalog is not the exact committed source prefix.')
+            if replay!=dict(source,version=CURRENT_VERSION,actions=source['actions'][:prefix]):
+                raise AssertionError(f'{name}: current catalog must derive the exact committed v7 action prefix.')
             cls.positions[name]=game(dict(replay,mode=1))
 
     def advance(self,before,action):
@@ -93,7 +93,9 @@ class PracticeTests(unittest.TestCase):
                 for field in ('title','prompt','source'):
                     self.assertIsInstance(demo[field],str)
                     self.assertTrue(demo[field].strip())
-                self.assertIn(f'{SOURCE}, first {prefix} actions.',demo['source'])
+                self.assertIn(f'first {prefix} actions from {SOURCE}',demo['source'])
+                self.assertIn(f'v{CURRENT_VERSION}',demo['source'].lower())
+                self.assertIn('derived',demo['source'].lower())
                 response=self.positions[name]
                 self.assertEqual(response['actions'],demo['replay']['actions'])
                 self.assertEqual((response['state']['side'],response['state']['orders'],response['state']['result']),(1,2,0))

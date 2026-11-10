@@ -30,6 +30,7 @@ fn check_bounds(_ s: State) {
     assert(s.orders >= 0 && s.orders <= 2)
     assert(s.bridge_mask < 4)
     for side in 1 .. 3 {
+        assert(s.developments[side] <= 7)
         assert(s.gold[side] >= 0 && s.gold[side] <= 40)
         assert(s.food[side] >= 0 && s.food[side] <= 40)
     }
@@ -583,7 +584,8 @@ fn same_campaign(_ a: State, _ b: State) -> bool {
     if a.side != b.side || a.orders != b.orders || a.turn != b.turn || a.result != b.result
         || a.passes != b.passes || a.completed_rounds != b.completed_rounds
         || a.round_limit != b.round_limit || a.decision_pending != b.decision_pending || a.bridge_mask != b.bridge_mask { return false }
-    for side in 0 .. 3 { if a.gold[side] != b.gold[side] || a.food[side] != b.food[side] { return false } }
+    for side in 0 .. 3 { if a.gold[side] != b.gold[side] || a.food[side] != b.food[side]
+        || a.developments[side] != b.developments[side] { return false } }
     for i in 0 .. tile_count(a) {
         if a.owner[i] != b.owner[i] || a.troops[i] != b.troops[i]
             || a.fort[i] != b.fort[i] || a.settlement[i] != b.settlement[i] || a.specialty[i] != b.specialty[i]
@@ -1549,4 +1551,252 @@ fn infantry_capture_can_fortify_but_two_order_assaults_cannot() {
     isolated = apply(isolated, Action { kind: 1, from: 7, to: 8, amount: 5 })
     assert(isolated.side == 1 && isolated.owner[8] == 1 && !supply(isolated, 1)[8])
     assert(!is_legal(isolated, Action { kind: 3, from: 8, to: 8, amount: 1 }))
+}
+
+fn research(_ town: usize, _ id: i64) -> Action { Action { kind: 13, from: town, to: town, amount: id } }
+#[test]
+fn research_requires_canonical_supplied_town_prerequisite_and_exact_payment() {
+    var s = initial(0)
+    assert(!is_legal(s, research(5, 1)))
+    s.settlement[5] = 2
+    s.specialty[5] = 1
+    s.gold[1] = 12
+    s.food[1] = 2
+    assert(is_legal(s, research(5, 1)) && !is_legal(s, research(5, 2)))
+    assert(!is_legal(s, research(5, 0)) && !is_legal(s, research(5, 4)))
+    assert(!is_legal(s, Action { kind: 13, from: 5, to: 1, amount: 1 }))
+    var poor = s
+    poor.gold[1] = 5
+    assert(!is_legal(poor, research(5, 1)))
+    var lost = s
+    lost.owner[0] = 2
+    assert(!is_legal(lost, research(5, 1)))
+    s = apply(s, research(5, 1))
+    assert(s.gold[1] == 6 && s.food[1] == 2 && s.orders == 1 && s.side == 1)
+    assert(s.developments[1] == 1 && s.developments[2] == 0)
+    assert(!is_legal(s, research(5, 1)) && is_legal(s, research(5, 2)))
+    poor = s
+    poor.food[1] = 1
+    assert(!is_legal(poor, research(5, 2)))
+    poor = s
+    poor.gold[1] = 5
+    assert(!is_legal(poor, research(5, 2)))
+    let after = apply(s, research(5, 2))
+    assert(after.gold[1] == 0 && after.food[1] == 0 && after.side == 2 && after.orders == 2)
+    assert(after.developments[1] == 3 && after.developments[2] == 0)
+    assert(same_army(army_at(after, 5), army_at(s, 5)))
+    s.side = 1
+    s.orders = 2
+    s.gold[1] = 40
+    s.food[1] = 40
+    s.settlement[1] = 2
+    assert(development_town(s, 1, 1, supply(s, 1)) == 1)
+    assert(development_town(s, 1, 2, supply(s, 1)) == 5)
+    assert(!is_legal(s, research(1, 2)))
+    s.specialty[1] = 1
+    assert(is_legal(s, research(1, 2)) && !is_legal(s, research(5, 2)))
+    s.decision_pending = true
+    assert(!is_legal(s, research(1, 2)))
+    s.decision_pending = false
+    s.result = 1
+    assert(!is_legal(s, research(1, 2)))
+}
+#[test]
+fn charter_and_rotation_suspend_resume_and_use_capped_real_economy() {
+    var s = initial(2)
+    // Owned region includes three farms; rotation is capped at two, not three.
+    for i in 0 .. tile_count(s) { if passable(s, i) { s.owner[i] = 1
+        s.troops[i] = 1 } }
+    s.owner[capital(s, 2)] = 2
+    s.settlement[9] = 2
+    s.specialty[9] = 1
+    let base = economy(s, 1)
+    s.developments[1] = 3
+    let improved = economy(s, 1)
+    assert(improved.gold_income == base.gold_income + 1)
+    assert(improved.food_production == base.food_production + 2)
+    s.settlement[1] = 2
+    assert(economy(s, 1).gold_income == improved.gold_income + 2)
+    s.food[1] = 40
+    s.gold[1] = 40
+    s.troops[0] = 7
+    let started = begin_turn(s)
+    assert(started.gold[1] == 40 && started.food[1] == 38)
+    // Losing operational granary removes only its own output and rotation bonus.
+    s.specialty[9] = 0
+    assert(active_developments(s, 1, supply(s, 1)) == 1)
+    let inactive = economy(s, 1)
+    s.specialty[9] = 1
+    assert(economy(s, 1).food_production == inactive.food_production + 4)
+    assert(active_developments(s, 1, supply(s, 1)) == 3)
+    // Synthetic capital disconnection exercises the shared supply gate.
+    s.owner[0] = 2
+    assert(active_developments(s, 1, supply(s, 1)) == 0 && s.developments[1] == 3)
+    assert(economy(s, 1).gold_income == 2 && economy(s, 1).food_production == 3)
+    s.owner[0] = 1
+    assert(active_developments(s, 1, supply(s, 1)) == 3)
+    // No supplied farm means no rotation output, even with operational knowledge.
+    for i in 0 .. tile_count(s) { if terrain(s, i) == 1 { s.owner[i] = 0 } }
+    let no_farms = economy(s, 1).food_production
+    s.developments[1] = 1
+    assert(economy(s, 1).food_production == no_farms)
+}
+#[test]
+fn muster_discount_is_local_paid_infantry_only_and_respects_caps() {
+    var s = initial(0)
+    s.settlement[5] = 2
+    s.specialty[5] = 2
+    s.developments[1] = 1
+    s.gold[1] = 8
+    s.food[1] = 4
+    assert(is_legal(s, research(5, 3)))
+    s = apply(s, research(5, 3))
+    assert(s.developments[1] == 5 && s.gold[1] == 2 && s.food[1] == 2)
+    let recruit = Action { kind: 2, from: 5, to: 5, amount: 2 }
+    assert(is_legal(s, recruit))
+    assert(recruitment_gold(s, 5, 0, true) == 2 && recruitment_gold(s, 0, 0, true) == 3)
+    assert(recruitment_gold(s, 5, 1, true) == 3 && recruitment_gold(s, 5, 2, true) == 4)
+    let after = apply(s, recruit)
+    assert(after.gold[1] == 0 && after.food[1] == 0 && after.troops[5] == s.troops[5] + 2)
+    assert(after.side == 2 && after.orders == 2)
+    s.troops[5] = 11
+    assert(!is_legal(s, recruit))
+    s.troops[5] = 10
+    assert(is_legal(s, recruit))
+    s.food[1] = 1
+    assert(!is_legal(s, recruit))
+    s.food[1] = 2
+    s.gold[1] = 1
+    assert(!is_legal(s, recruit))
+    s.gold[1] = 2
+    s.specialty[5] = 1
+    assert(!is_legal(s, recruit) && recruitment_gold(s, 5, 0, true) == 3)
+    s.specialty[5] = 2
+    s.owner[0] = 2
+    assert(!is_legal(s, recruit) && recruitment_gold(s, 5, 0, false) == 3)
+}
+#[test]
+fn capturing_research_town_keeps_knowledge_with_original_kingdom() {
+    var s = initial(0)
+    s.settlement[5] = 2
+    s.specialty[5] = 2
+    s.developments[1] = 5
+    s.owner[6] = 2
+    s.troops[6] = 8
+    s.side = 2
+    let attack = Action { kind: 1, from: 6, to: 5, amount: 7 }
+    assert(is_legal(s, attack))
+    let after = apply(s, attack)
+    assert(after.owner[5] == 2 && after.specialty[5] == 2)
+    assert(after.developments[1] == 5 && after.developments[2] == 0)
+    assert(active_developments(after, 1, supply(after, 1)) == 0)
+    assert(recruitment_gold(after, 5, 0, true) == 3)
+}
+#[test]
+fn development_graph_replays_from_initial_with_no_knowledge_in_save() {
+    var s = initial(0)
+    let actions = [
+        Action { kind: 4, from: 5, to: 5, amount: 2 }, pass(), pass(),
+        Action { kind: 3, from: 0, to: 0, amount: 1 }, pass(), pass(),
+        research(5, 1), pass(), pass(),
+        Action { kind: 3, from: 1, to: 1, amount: 1 }, pass(), pass(),
+        Action { kind: 11, from: 5, to: 5, amount: 2 }, pass(), pass(),
+        research(5, 3), pass(), pass(),
+    ]
+    for i in 0 .. 18 { assert(is_legal(s, actions[i]))
+        s = apply(s, actions[i])
+        check_bounds(s) }
+    assert(s.developments[1] == 5 && s.developments[2] == 0)
+    var replay = initial(0)
+    for i in 0 .. 18 { replay = apply(replay, actions[i]) }
+    assert(same_campaign(s, replay))
+}
+#[test]
+fn every_development_mask_is_bounded_and_baseline_has_no_purchase_bonus() {
+    for mask in 0 .. 8 {
+        var s = initial(0)
+        s.settlement[5] = 2
+        s.specialty[5] = 2
+        s.gold[1] = 40
+        s.food[1] = 40
+        s.developments[1] = mask
+        s.developments[2] = mask
+        let choices = legal(s)
+        assert(choices.len < MAX_ACTIONS)
+        var research_count: usize = 0
+        for i in 0 .. choices.len {
+            let action = choices.items[i]
+            if action.kind == 13 { research_count += 1 }
+            let after = apply(s, action)
+            check_bounds(after)
+            assert(after.developments[1] <= 7 && after.developments[2] == mask)
+        }
+        assert(research_count <= 2)
+    }
+    var s = initial(0)
+    s.settlement[5] = 2
+    let before = evaluate(s, 1)
+    let after = apply(s, research(5, 1))
+    // Stage A intentionally has the original gold-stock evaluation: no invented
+    // asset/option bonus. Policy B must be a separately tested same-rules change.
+    assert(evaluate(after, 1) == before - 12)
+}
+#[test]
+fn research_never_displaces_immediate_capital_wins_or_needed_defense() {
+    for difficulty in 0 .. 2 {
+        var s = initial(0)
+        s.settlement[5] = 2
+        s.gold[1] = 12
+        s.owner[13] = 1
+        s.troops[13] = 10
+        assert(is_legal(s, research(5, 1)))
+        var stats = Search { nodes: 0 }
+        let win = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        assert(apply(s, win).result == 1)
+        s = initial(0)
+        s.owner[1] = 2
+        s.troops[1] = 9
+        s.settlement[5] = 2
+        s.gold[1] = 6
+        assert(is_legal(s, research(5, 1)))
+        let protect = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        let protected = apply(s, protect)
+        assert(protect.kind != 13 && protected.owner[0] == 1 && direct_capital_threats(protected, 1) == 0)
+    }
+}
+#[test]
+fn both_kingdoms_research_and_dense_developed_boards_fit_action_capacity() {
+    for scenario in 0 .. 3 {
+        for side in 1 .. 3 {
+            let player: i64 = side.downcast_unchecked()
+            var s = initial(scenario)
+            s.side = player
+            let town = if side == 1 { map_width(s) } else { tile_count(s) - 1 - map_width(s) }
+            s.settlement[town] = 2
+            s.specialty[town] = 2
+            s.gold[side] = 12
+            s.food[side] = 2
+            assert(is_legal(s, research(town, 1)))
+            s = apply(s, research(town, 1))
+            assert(is_legal(s, research(town, 3)))
+            s = apply(s, research(town, 3))
+            assert(s.developments[side] == 5 && s.gold[side] == 0 && s.food[side] == 0)
+            s = initial(scenario)
+            s.side = player
+            s.gold[side] = 40
+            s.food[side] = 40
+            for i in 0 .. tile_count(s) {
+                if passable(s, i) { s.owner[i] = player
+                    s.troops[i] = 6
+                    s.settlement[i] = 2 }
+            }
+            s.specialty[town] = 2
+            s.developments[side] = 1
+            let choices = legal(s)
+            assert(choices.len > 0 && choices.len < MAX_ACTIONS)
+            var count: usize = 0
+            for i in 0 .. choices.len { if choices.items[i].kind == 13 { count += 1 } }
+            assert(count == 1)
+        }
+    }
 }

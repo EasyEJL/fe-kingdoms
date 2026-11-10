@@ -9,7 +9,7 @@ def build():
     source='\n'.join((ROOT/'src'/p).read_text(encoding='utf-8-sig') for p in ('engine.fe','native.fe'))
     (ROOT/'generated/kingdom.fe').write_text(source)
     subprocess.run(['fe','build','--backend','native','-O','1','--emit','executable','--out-dir','out','generated/kingdom.fe'],cwd=ROOT,check=True)
-    for version in (1,2,3,4,5,6):
+    for version in (1,2,3,4,5,6,7):
         legacy='\n'.join((ROOT/f'legacy/v{version}'/name).read_text(encoding='utf-8-sig') for name in ('engine.fe','native.fe'))
         (ROOT/f'generated/kingdom-v{version}.fe').write_text(legacy)
         subprocess.run(['fe','build','--backend','native','-O','1','--emit','executable','--out-dir','out',f'generated/kingdom-v{version}.fe'],cwd=ROOT,check=True)

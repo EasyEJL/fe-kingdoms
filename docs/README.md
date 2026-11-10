@@ -48,3 +48,5 @@ Add an ADR for a meaningful architectural or rules decision, not every implement
 
 - [V7 Astra strategy comparison](playtests/2026-11-10-v7-astra.md): bounded rush/development evidence and a future opponent-version A/B protocol.
 - [ADR 0016: Isolated practice replays](adr/0016-isolated-practice-replays.md).
+
+- [ADR 0017: Bounded kingdom development](adr/0017-bounded-kingdom-development.md).

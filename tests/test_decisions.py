@@ -67,7 +67,7 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual(game(request([],mode=0))['decisions'],[])
         pending=CYCLE*60
         self.assertEqual(game(request(pending,mode=0))['decisions'],[])
-        fixture=json.loads((ROOT/'tests/fixtures/current-v7-win.json').read_text())
+        fixture=json.loads((ROOT/f'tests/fixtures/current-v{CURRENT_VERSION}-win.json').read_text())
         self.assertEqual(game(dict(fixture,mode=0))['decisions'],[])
 
     def test_native_modes_keep_only_actual_final_two_decisions(self):

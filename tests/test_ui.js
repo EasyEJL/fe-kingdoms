@@ -7,14 +7,16 @@ const get=id=>{if(!elements.has(id))elements.set(id,element());return elements.g
 const legacySaved=JSON.stringify({version:1,difficulty:0,actions:[[0,0,0,0]]});
 const previousSaved=JSON.stringify({version:2,scenario:0,difficulty:0,actions:[[0,0,0,0]]});
 const campaignSaved=JSON.stringify({version:3,scenario:0,difficulty:0,actions:[[0,0,0,0]]});
-const storage=new Map([['fe-kingdoms-v1',legacySaved],['fe-kingdoms-v2',previousSaved],['fe-kingdoms-v3',campaignSaved],['fe-kingdoms-v4',JSON.stringify({version:4,scenario:0,difficulty:0,actions:[[0,0,0,0]]})],['fe-kingdoms-v5',JSON.stringify({version:5,scenario:0,difficulty:0,actions:[[0,0,0,0]]})],['fe-kingdoms-v7',JSON.stringify({version:7,scenario:0,difficulty:0,actions:[[0,0,0,0]]})]]);
+const storage=new Map([['fe-kingdoms-v1',legacySaved],['fe-kingdoms-v2',previousSaved],['fe-kingdoms-v3',campaignSaved],['fe-kingdoms-v4',JSON.stringify({version:4,scenario:0,difficulty:0,actions:[[0,0,0,0]]})],['fe-kingdoms-v5',JSON.stringify({version:5,scenario:0,difficulty:0,actions:[[0,0,0,0]]})],['fe-kingdoms-v8',JSON.stringify({version:8,scenario:0,difficulty:0,actions:[[0,0,0,0]]})]]);
 const riversSaved=JSON.stringify({version:6,scenario:0,difficulty:0,actions:[[0,0,0,0]]});storage.set('fe-kingdoms-v6',riversSaved);
+const frontiersSaved=JSON.stringify({version:7,scenario:0,difficulty:0,actions:[[0,0,0,0]]});storage.set('fe-kingdoms-v7',frontiersSaved);
+const frontiersSlots=JSON.stringify({schema:1,slots:[{id:'1',name:'Frozen frontier',savedAt:'2026-11-10T00:00:00.000Z',replay:JSON.parse(frontiersSaved)}]});storage.set('fe-kingdoms-v7-slots-v1',frontiersSlots);
 let fetches=0,accept=false,response,requests=[],confirmations=[];
 const context=vm.createContext({document:{getElementById:get,querySelectorAll:()=>[...elements.values()],createElement:element},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},confirm:message=>{confirmations.push(message);return accept},fetch:async(url,options)=>{fetches++;requests.push(JSON.parse(options.body));return response},console,setTimeout,URL,Blob});
 vm.runInContext(html.split('<script>')[1].split('</script>')[0],context);
 const run=s=>vm.runInContext(s,context),pass=[0,0,0,0],recruit=[2,0,0,2],move=[1,0,1,4],badAttack=[1,1,2,1];
 const preview={foodCost:2,food1After:10,food2After:12,settlementAfter:0,index:1,outcome:4,cost:3,sourceTroops:7,targetTroops:7,targetOwner:1,nextSide:1,nextOrders:1,result:0,defense:0};
-const start={version:7,difficulty:0,economy:[{side:1,food:12,goldIncome:3,foodProduction:3,foodUpkeep:3,foodNet:0,disconnectedTiles:0,shortageLossesNextTurn:0},{side:2,food:12,goldIncome:3,foodProduction:3,foodUpkeep:3,foodNet:0,disconnectedTiles:0,shortageLossesNextTurn:0}],map:{width:5,height:3,count:15,topology:1,scenario:0,blueCapital:0,redCapital:14,orderBudget:2,baseRoundLimit:60,extensionRounds:20,traceCapacity:2048},state:{side:1,orders:2,turn:1,result:0,completedRounds:0,roundLimit:60,decisionPending:0,traceCapacityReached:0,gold1:8,gold2:8,nodes:0,depth:1},tiles:Array.from({length:15},(_,index)=>({index,q:index%5,r:Math.floor(index/5),owner:[0,1,5].includes(index)?1:0,troops:index===0?5:1,infantry:index===0?5:1,cavalry:0,siege:0,fort:0,supplied:1,settlement:index===5?1:0,passable:1,upkeep:index===0?2:0,terrain:index===0?4:0})),legal:[pass,recruit,move,badAttack],previews:[{index:0,outcome:0},preview,{index:2,outcome:1,sourceTroops:1,targetTroops:5},{index:3,outcome:3,sourceTroops:1,targetTroops:1,defense:1}],actions:[]};
+const start={version:8,difficulty:0,economy:[{side:1,food:12,goldIncome:3,foodProduction:3,foodUpkeep:3,foodNet:0,disconnectedTiles:0,shortageLossesNextTurn:0},{side:2,food:12,goldIncome:3,foodProduction:3,foodUpkeep:3,foodNet:0,disconnectedTiles:0,shortageLossesNextTurn:0}],map:{width:5,height:3,count:15,topology:1,scenario:0,blueCapital:0,redCapital:14,orderBudget:2,baseRoundLimit:60,extensionRounds:20,traceCapacity:2048},state:{side:1,orders:2,turn:1,result:0,completedRounds:0,roundLimit:60,decisionPending:0,traceCapacityReached:0,gold1:8,gold2:8,nodes:0,depth:1},tiles:Array.from({length:15},(_,index)=>({index,q:index%5,r:Math.floor(index/5),owner:[0,1,5].includes(index)?1:0,troops:index===0?5:1,infantry:index===0?5:1,cavalry:0,siege:0,fort:0,supplied:1,settlement:index===5?1:0,passable:1,upkeep:index===0?2:0,terrain:index===0?4:0})),legal:[pass,recruit,move,badAttack],previews:[{index:0,outcome:0},preview,{index:2,outcome:1,sourceTroops:1,targetTroops:5},{index:3,outcome:3,sourceTroops:1,targetTroops:1,defense:1}],actions:[]};
 function setGame(value){run('game='+JSON.stringify(value)+';render();')}
 function reply(value){response={ok:true,json:async()=>JSON.parse(JSON.stringify(value))};}
 function openCards(){return get('actions').children.filter(e=>e.className==='territory open')}
@@ -28,7 +30,7 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  await run("load('{bad')");assert.equal(fetches,0);
  response={ok:false,json:async()=>({error:'Fe rejected'})};await run('load('+JSON.stringify(storage.get('fe-kingdoms-v2'))+')');assert.equal(run('selected'),5);assert.equal(run('game.actions.length'),1);
  // New games are v6; hierarchy is immediately present even without preselection.
- accept=true;reply(start);await get('new').onclick();assert.equal(run('selected'),null);assert.equal(requests.at(-1).version,7);assert.equal(requests.at(-1).mode,1);
+ accept=true;reply(start);await get('new').onclick();assert.equal(run('selected'),null);assert.equal(requests.at(-1).version,8);assert.equal(requests.at(-1).mode,1);
  assert.match(get('turn-guide').textContent,/orders TOTAL/);assert.match(get('opening-hint').textContent,/5 troops from A1 to B1.*order 1.*7 from B1 to forest B2.*order 2.*Fe forecast/);
  assert.equal(get('actions').children.length,3);assert.equal(openCards().length,0);assert.equal(get('global-actions').children.length,1);
  let before=fetches;get('actions').children[0].children[0].onclick();assert.equal(run('selected'),0);assert.equal(openCards().length,1);assert.equal(orderButtons(openCards()[0]).length,2);assert.equal(fetches,before);
@@ -38,7 +40,7 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  // True axial geometry, not a rectangular grid with clipped corners.
  assert.equal(get('board').children[0].style.left,'0px');assert.equal(get('board').children[5].style.left,'74px');assert.equal(get('board').children[5].style.top,'128px');assert.equal(get('board').children[10].style.left,'148px');
  const first={...start,state:{...start.state,orders:1,gold1:3},actions:[recruit]};reply(first);await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');
- assert.equal(requests.at(-1).version,7);assert.equal(requests.at(-1).mode,1);assert.equal(run('game.state.orders'),1);assert.match(get('turn-guide').textContent,/Red has not moved/);assert.equal(get('opening-hint').textContent,'');
+ assert.equal(requests.at(-1).version,8);assert.equal(requests.at(-1).mode,1);assert.equal(run('game.state.orders'),1);assert.match(get('turn-guide').textContent,/Red has not moved/);assert.equal(get('opening-hint').textContent,'');
  const second={...first,state:{...first.state,side:2,orders:2,turn:2,gold2:8},actions:[recruit,move]};reply(second);before=fetches;await run('perform('+JSON.stringify(move)+','+JSON.stringify(start.previews[2])+')');
  assert.equal(fetches,before+1);assert.equal(requests.at(-1).mode,1);assert.equal(get('global-actions').children[0].textContent,'Run computer turn');
  const ai=[2,9,9,2],next={...start,state:{...start.state,turn:3,completedRounds:1,gold1:5,gold2:5},actions:[recruit,move,ai]};reply(next);await get('global-actions').children[0].onclick();assert.equal(requests.at(-1).mode,0);assert.match(get('activity').textContent,/Computer: 1. Recruit/);assert.match(get('status').textContent,/Completed rounds: 1 \/ 60/);
@@ -46,20 +48,20 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  await run('perform('+JSON.stringify(badAttack)+','+JSON.stringify(start.previews[3])+')');assert.equal(fetches,before);assert.match(confirmations.at(-1),/all 1 attackers lost/);
  assert.match(run('forecast([0,0,0,0],{outcome:0,result:3})'),/ends the match in a draw/i);assert.match(run('forecast([1,13,14,8],{outcome:2,result:1})'),/wins the match immediately/);
  // Loading v6 on Red still pauses. Legacy loads are read-only and preserve BOTH checkpoints.
- accept=true;reply(second);await run('load('+JSON.stringify(JSON.stringify({version:7,scenario:0,difficulty:0,actions:second.actions}))+')');assert.equal(run('selected'),null);assert.equal(get('global-actions').children[0].textContent,'Run computer turn');
- const hexSaved=storage.get('fe-kingdoms-v7'),legacy={...start,tiles:untypedTiles(),economy:[],version:1,map:{...start.map,topology:0},actions:[pass]};reply(legacy);await get('legacy').onclick();assert.equal(requests.at(-1).version,1);assert.equal(requests.at(-1).mode,1);assert.equal(storage.get('fe-kingdoms-v1'),legacySaved);assert.equal(storage.get('fe-kingdoms-v7'),hexSaved);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v2'),previousSaved);assert.match(get('turn-guide').textContent,/read.only|original square rules/i);assert.match(get('global-actions').children[0].textContent,/Read-only/);assert.equal(get('board').children[5].style.left,'0px');assert.equal(get('board').children[5].style.top,'172px');
+ accept=true;reply(second);await run('load('+JSON.stringify(JSON.stringify({version:8,scenario:0,difficulty:0,actions:second.actions}))+')');assert.equal(run('selected'),null);assert.equal(get('global-actions').children[0].textContent,'Run computer turn');
+ const hexSaved=storage.get('fe-kingdoms-v8'),legacy={...start,tiles:untypedTiles(),economy:[],version:1,map:{...start.map,topology:0},actions:[pass]};reply(legacy);await get('legacy').onclick();assert.equal(requests.at(-1).version,1);assert.equal(requests.at(-1).mode,1);assert.equal(storage.get('fe-kingdoms-v1'),legacySaved);assert.equal(storage.get('fe-kingdoms-v8'),hexSaved);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v2'),previousSaved);assert.match(get('turn-guide').textContent,/read.only|original square rules/i);assert.match(get('global-actions').children[0].textContent,/Read-only/);assert.equal(get('board').children[5].style.left,'0px');assert.equal(get('board').children[5].style.top,'172px');
  before=fetches;await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(fetches,before);assert.equal(run('replay().version'),1);
  // v2 is also read-only, retaining its own rules/checkpoint and the v6 save.
- const previous={...start,tiles:untypedTiles(),economy:[],version:2,actions:[pass]};reply(previous);await get('previous').onclick();assert.equal(requests.at(-1).version,2);assert.equal(storage.get('fe-kingdoms-v7'),hexSaved);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v2'),previousSaved);assert.equal(run('replay().version'),2);assert.match(get('status').textContent,/v2 hex replay/);
+ const previous={...start,tiles:untypedTiles(),economy:[],version:2,actions:[pass]};reply(previous);await get('previous').onclick();assert.equal(requests.at(-1).version,2);assert.equal(storage.get('fe-kingdoms-v8'),hexSaved);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v2'),previousSaved);assert.equal(run('replay().version'),2);assert.match(get('status').textContent,/v2 hex replay/);
  before=fetches;await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(fetches,before);
  // v3 campaigns retain economy but do not invent role counts or overwrite the v6 save.
- const campaign={...start,tiles:untypedTiles(),version:3,actions:[pass]};reply(campaign);await get('campaign').onclick();assert.equal(requests.at(-1).version,3);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v7'),hexSaved);assert.equal(run('replay().version'),3);assert.match(get('status').textContent,/v3 campaign replay/);assert.equal(get('economy').children.length,2);run('selected=0;render()');assert.doesNotMatch(get('territory-detail').textContent,/Infantry/);
+ const campaign={...start,tiles:untypedTiles(),version:3,actions:[pass]};reply(campaign);await get('campaign').onclick();assert.equal(requests.at(-1).version,3);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v8'),hexSaved);assert.equal(run('replay().version'),3);assert.match(get('status').textContent,/v3 campaign replay/);assert.equal(get('economy').children.length,2);run('selected=0;render()');assert.doesNotMatch(get('territory-detail').textContent,/Infantry/);
  before=fetches;await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(fetches,before);
  // All three map choices use engine dimensions and retain their scenario in saves.
  accept=true;
  for(const [scenario,width,height] of [[0,5,3],[1,7,5],[2,9,5]]){
   const mapped={...start,map:{...start.map,scenario,width,height,count:width*height,redCapital:width*height-1},tiles:Array.from({length:width*height},(_,index)=>({...start.tiles[0],index,q:index%width,r:Math.floor(index/width),owner:[0,1,width].includes(index)?1:0,terrain:index===0?4:0}))};
-  get('scenario').value=String(scenario);reply(mapped);await get('new').onclick();assert.equal(requests.at(-1).scenario,scenario);assert.equal(requests.at(-1).version,7);assert.equal(get('board').children.length,width*height);assert.equal(run('replay().scenario'),scenario);assert.match(get('goal').textContent,new RegExp(String.fromCharCode(64+width)+height));assert.equal(get('board').children[width].style.left,'74px');
+  get('scenario').value=String(scenario);reply(mapped);await get('new').onclick();assert.equal(requests.at(-1).scenario,scenario);assert.equal(requests.at(-1).version,8);assert.equal(get('board').children.length,width*height);assert.equal(run('replay().scenario'),scenario);assert.match(get('goal').textContent,new RegExp(String.fromCharCode(64+width)+height));assert.equal(get('board').children[width].style.left,'74px');
  }
  // Economy, warnings and forecasts display Fe values, not browser calculations.
  const resource={...start,economy:[{side:1,food:4,goldIncome:7,foodProduction:17,foodUpkeep:9,foodNet:8,disconnectedTiles:2,shortageLossesNextTurn:3}],tiles:start.tiles.map(t=>t.index===2?{...t,terrain:5,passable:0,troops:0}:t)};setGame(resource);
@@ -142,7 +144,7 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  assert.doesNotMatch(get('board').children[0].className,/recent/);assert.equal(get('global-actions').children.length,1);
  before=fetches;await run('perform([9,0,0,0],{})');assert.equal(fetches,before);
  // Loading a boundary never runs Red or resolves the decision; only Fe legal options are rendered.
- accept=true;reply(boundary);await run('load('+JSON.stringify(JSON.stringify({version:7,scenario:0,difficulty:0,actions:boundary.actions}))+')');
+ accept=true;reply(boundary);await run('load('+JSON.stringify(JSON.stringify({version:8,scenario:0,difficulty:0,actions:boundary.actions}))+')');
  assert.equal(fetches,before+1);assert.equal(requests.at(-1).mode,1);assert.equal(get('global-actions').children.length,2);
  setGame({...boundary,legal:[draw],previews:[{result:3}]});assert.equal(get('global-actions').children.length,1);assert.match(get('global-actions').children[0].children[0].textContent,/Accept draw/);
  setGame(boundary);accept=true;const drawn={...boundary,state:{...boundary.state,result:3,decisionPending:0},actions:[...boundary.actions,draw],legal:[],previews:[]};reply(drawn);
@@ -159,11 +161,11 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  assert.equal(fetches,before+1);assert.match(get('activity').textContent,/Round limit reached/);assert.doesNotMatch(get('activity').textContent,/Your turn is ready/);assert.equal(get('global-actions').children.length,2);
  setGame(second);reply({...full,actions:[...second.actions,ai]});await get('global-actions').children[0].onclick();assert.match(get('activity').textContent,/Replay capacity reached/);assert.doesNotMatch(get('activity').textContent,/Match ended|Your turn is ready/);
  // Failed decisions preserve the position and successful checkpoint, allowing a deliberate retry.
- setGame(boundary);const savedBefore=storage.get('fe-kingdoms-v7');response={ok:false,json:async()=>({error:'Decision rejected'})};
- await get('global-actions').children[0].onclick();assert.equal(run('game.state.decisionPending'),1);assert.equal(storage.get('fe-kingdoms-v7'),savedBefore);assert.equal(run('busy'),false);assert.match(get('error').textContent,/Decision rejected/);
+ setGame(boundary);const savedBefore=storage.get('fe-kingdoms-v8');response={ok:false,json:async()=>({error:'Decision rejected'})};
+ await get('global-actions').children[0].onclick();assert.equal(run('game.state.decisionPending'),1);assert.equal(storage.get('fe-kingdoms-v8'),savedBefore);assert.equal(run('busy'),false);assert.match(get('error').textContent,/Decision rejected/);
  // New byte ceiling is inclusive; oversized files are rejected before reading or transport.
  before=fetches;let reads=0;get('file').files=[{size:262145,text:async()=>{reads++;return '{}'}}];await get('file').onchange();assert.equal(reads,0);assert.equal(fetches,before);assert.match(get('error').textContent,/too large/);
- reply(start);get('file').files=[{size:262144,text:async()=>{reads++;return JSON.stringify({version:7,scenario:0,difficulty:0,actions:[]})}}];await get('file').onchange();assert.equal(reads,1);assert.equal(fetches,before+1);assert.equal(requests.at(-1).version,7);
+ reply(start);get('file').files=[{size:262144,text:async()=>{reads++;return JSON.stringify({version:8,scenario:0,difficulty:0,actions:[]})}}];await get('file').onchange();assert.equal(reads,1);assert.equal(fetches,before+1);assert.equal(requests.at(-1).version,8);
  // Rivers/bridges are readable, distinct artwork. Passability remains Fe-provided.
  const riverMap={...start,tiles:start.tiles.map(t=>t.index===2?{...t,terrain:8,passable:0,troops:0,infantry:0}:t.index===1?{...t,terrain:9}:t),supply:[{side:1,connectedOwned:17,cutOffOwned:3},{side:2,connectedOwned:11,cutOffOwned:6}]};
  setGame(riverMap);run('selected=2;render()');
@@ -190,12 +192,12 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  assert.doesNotMatch(run('forecast([2,0,0,2],'+JSON.stringify(preview)+')'),/Supply|undefined|NaN/);
  setGame({...riverMap,supply:undefined});assert.equal(get('supply').hidden,true);assert.equal(get('supply').textContent,'');assert.doesNotMatch(run('forecast([2,0,0,2],'+JSON.stringify(supplyPreview)+')'),/before →|undefined|NaN/);
  // v5 preserves boundary progress and original fields without claiming v6 supply features.
- const v7Saved=storage.get('fe-kingdoms-v7'),frozenSaves=new Map(storage),v5={...boundary,version:5,supply:undefined};
+ const v7Saved=storage.get('fe-kingdoms-v8'),frozenSaves=new Map(storage),v5={...boundary,version:5,supply:undefined};
  reply(v5);await get('rounds').onclick();assert.equal(requests.at(-1).version,5);assert.equal(requests.at(-1).mode,1);assert.equal(run('replay().version'),5);
  assert.match(get('status').textContent,/Legacy v5 campaign replay.*Saved at round-limit decision.*Completed rounds: 60 \/ 60/);
  assert.match(get('turn-guide').textContent,/Saved at a round-limit decision/);assert.equal(get('global-actions').children.length,1);assert.match(get('global-actions').children[0].textContent,/Read-only/);
  assert.equal(get('supply').hidden,true);assert.equal(get('rounds').hidden,false);assert.equal(get('save').disabled,false);
- for(const [key,value] of frozenSaves)assert.equal(storage.get(key),value);assert.equal(storage.get('fe-kingdoms-v7'),v7Saved);
+ for(const [key,value] of frozenSaves)assert.equal(storage.get(key),value);assert.equal(storage.get('fe-kingdoms-v8'),v7Saved);
  before=fetches;await run('perform([9,0,0,0],{})');await run('perform([10,0,0,0],{})');assert.equal(fetches,before);
  setGame({...v5,supply:riverMap.supply});assert.equal(get('supply').hidden,true);assert.doesNotMatch(run('forecast([2,0,0,2],'+JSON.stringify(supplyPreview)+')'),/Supply|before →/);
  // Read-only saved turns never invite interaction with a nonexistent computer-turn button.
@@ -331,7 +333,7 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  // Human requests and replay loads never retain automatic-response analysis, even if stale data is returned.
  setGame(decisionResponse);reply({...decisionResponse,actions:[...decisionResponse.actions,recruit],state:{...start.state,orders:1}});await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');
  assert.equal(requests.at(-1).mode,1);assert.equal(get('search').children.length,0);assert.equal(run('game.decisions.length'),0);assert.match(get('search').textContent,/replays store orders only/);
- reply(decisionResponse);await run('load('+JSON.stringify(JSON.stringify({version:7,scenario:0,difficulty:1,actions:decisionResponse.actions}))+')');
+ reply(decisionResponse);await run('load('+JSON.stringify(JSON.stringify({version:8,scenario:0,difficulty:1,actions:decisionResponse.actions}))+')');
  assert.equal(requests.at(-1).mode,1);assert.equal(get('search').children.length,0);assert.equal(run('game.decisions.length'),0);assert.equal(run('replay().actions.length'),4);
  setGame(decisionResponse);accept=true;reply({...start,decisions:[decision1,decision2]});await get('new').onclick();assert.equal(get('search').children.length,0);assert.equal(run('game.actions.length'),0);
  // Frozen v6 does not acquire v7 decision metadata, and repeat renders do not duplicate details.
@@ -340,13 +342,13 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  const old={...start};delete old.previews;setGame(old);run('selected=0;render()');assert.doesNotThrow(()=>run('render()'));assert.equal(run('busy'),false);
  assert.match(orderButtons(openCards()[0])[0].children[0].textContent,/Check Fe order cost/);assert.doesNotMatch(orderButtons(openCards()[0])[0].children[0].textContent,/1 order/);
  // Named snapshots are explicitly saved replay copies, not new engine payload fields.
- const slotsKey='fe-kingdoms-v7-slots-v1',checkpointKey='fe-kingdoms-v7';
+ const slotsKey='fe-kingdoms-v8-slots-v1',checkpointKey='fe-kingdoms-v8';
  const frozenKeys=new Map([...storage].filter(([key])=>key!==checkpointKey));
  const slots=()=>JSON.parse(storage.get(slotsKey)).slots;
  const campaignGame={...start,map:{...start.map,scenario:2},actions:[recruit,move]};
  setGame(campaignGame);run('checkpoint()');get('snapshot-name').value='  Long campaign  ';
  assert.equal(get('snapshot-save').onclick(),true);assert.equal(slots().length,1);assert.equal(slots()[0].name,'Long campaign');
- assert.deepEqual(slots()[0].replay,{version:7,scenario:2,difficulty:0,actions:[recruit,move]});
+ assert.deepEqual(slots()[0].replay,{version:8,scenario:2,difficulty:0,actions:[recruit,move]});
  assert.match(get('snapshot-status').textContent,/stays unchanged.*Resume campaign autosaves/);
  const longSnapshot=storage.get(slotsKey);accept=false;reply(start);before=fetches;
  // A matching saved snapshot protects the outgoing campaign, so no discard prompt is needed.
@@ -405,12 +407,12 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  let finishRead,finishResponse;get('file').files=[{size:100,text:()=>new Promise(resolve=>{finishRead=resolve})}];
  const imported=get('file').onchange();assert.equal(run('busy'),true);assert.equal(get('snapshot-name').disabled,true);before=fetches;
  await get('new').onclick();await get('snapshot-load').onclick();assert.equal(get('snapshot-save').onclick(),false);await get('resume').onclick();assert.equal(fetches,before);
- response={ok:true,json:()=>new Promise(resolve=>{finishResponse=resolve})};finishRead(JSON.stringify({version:7,scenario:0,difficulty:0,actions:[]}));
+ response={ok:true,json:()=>new Promise(resolve=>{finishResponse=resolve})};finishRead(JSON.stringify({version:8,scenario:0,difficulty:0,actions:[]}));
  await new Promise(resolve=>setImmediate(resolve));assert.equal(run('busy'),true);assert.equal(fetches,before+1);await get('snapshot-load').onclick();assert.equal(fetches,before+1);
  finishResponse(JSON.parse(JSON.stringify(start)));await imported;assert.equal(run('busy'),false);assert.equal(get('snapshot-name').disabled,false);
  // Cancel and rejection during import release the lock without disturbing accepted data.
  setGame(first);run('checkpoint()');const importCheckpoint=storage.get(checkpointKey);accept=false;before=fetches;
- get('file').files=[{size:100,text:async()=>JSON.stringify({version:7,scenario:0,difficulty:0,actions:[]})}];await get('file').onchange();assert.equal(fetches,before);assert.equal(run('busy'),false);assert.equal(storage.get(checkpointKey),importCheckpoint);
+ get('file').files=[{size:100,text:async()=>JSON.stringify({version:8,scenario:0,difficulty:0,actions:[]})}];await get('file').onchange();assert.equal(fetches,before);assert.equal(run('busy'),false);assert.equal(storage.get(checkpointKey),importCheckpoint);
  get('file').files=[{size:100,text:async()=>'{bad'}];await get('file').onchange();assert.equal(run('busy'),false);assert.equal(storage.get(checkpointKey),importCheckpoint);
  // Double-clicked snapshot loads make only one transport request and do not modify snapshots.
  accept=true;reply(start);before=fetches;const loading=get('snapshot-load').onclick();await get('snapshot-load').onclick();await loading;assert.equal(fetches,before+1);assert.equal(storage.get(slotsKey),beforeRejectedSlots);
@@ -437,7 +439,7 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  reply(practiceGame(0));before=fetches;const entering=get('practice-start').onclick();await get('practice-start').onclick();await entering;
  assert.equal(fetches,before+1);assert.equal(run('practiceSession.id'),demos[0].id);assert.equal(requests.at(-1).mode,1);assert.deepEqual(requests.at(-1).actions,demos[0].replay.actions);
  assert.deepEqual(Object.keys(requests.at(-1)).sort(),['actions','difficulty','mode','scenario','version']);
- assert.equal(get('practice-banner').hidden,false);assert.match(get('practice-description').textContent,/Prepared example.*NOT saved/);assert.match(get('practice-source').textContent,/Model-selected Blue.*not human/);
+ assert.equal(get('practice-banner').hidden,false);assert.match(get('practice-description').textContent,/Prepared example.*NOT saved/);assert.match(get('practice-source').textContent,/V8-derived.*model-selected Blue.*not a recorded v8 match/);
  assert.equal(get('snapshot-save').disabled,true);assert.equal(get('snapshot-replace').disabled,true);assert.equal(get('snapshot-delete').disabled,true);assert.equal(get('save').disabled,false);
  assert.equal(get('snapshot-save').onclick(),false);assert.equal(get('snapshot-replace').onclick(),false);assert.equal(get('snapshot-delete').onclick(),false);run('checkpoint()');unchangedPracticeStorage();
  // Human actions and native Red requests continue in practice without ANY storage writes.
@@ -464,9 +466,9 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  // Other navigation cancels/rejects without abandoning practice; successful navigation exits only on response.
  setGame(protectedCampaign);run('checkpoint()');reply(practiceGame(0));await get('practice-start').onclick();accept=false;before=fetches;
  await get('new').onclick();assert.equal(fetches,before);assert.equal(run('practiceSession.id'),demos[0].id);
- get('file').files=[{size:100,text:async()=>JSON.stringify({version:7,scenario:0,difficulty:0,actions:[]})}];await get('file').onchange();assert.equal(fetches,before);assert.equal(run('practiceSession.id'),demos[0].id);
+ get('file').files=[{size:100,text:async()=>JSON.stringify({version:8,scenario:0,difficulty:0,actions:[]})}];await get('file').onchange();assert.equal(fetches,before);assert.equal(run('practiceSession.id'),demos[0].id);
  accept=true;
- const navigation=[()=>get('new').onclick(),()=>get('resume').onclick(),()=>get('legacy').onclick(),()=>get('snapshot-load').onclick(),()=>{get('file').files=[{size:100,text:async()=>JSON.stringify({version:7,scenario:0,difficulty:0,actions:[]})}];return get('file').onchange()}];
+ const navigation=[()=>get('new').onclick(),()=>get('resume').onclick(),()=>get('legacy').onclick(),()=>get('snapshot-load').onclick(),()=>{get('file').files=[{size:100,text:async()=>JSON.stringify({version:8,scenario:0,difficulty:0,actions:[]})}];return get('file').onchange()}];
  for(const navigate of navigation){
   response={ok:false,json:async()=>({error:'Navigation rejected'})};const oldPosition=run('JSON.stringify(replay())'),oldStorage=new Map(storage);await navigate();
   assert.equal(run('practiceSession.id'),demos[0].id);assert.equal(run('JSON.stringify(replay())'),oldPosition);assert.deepEqual([...storage],[...oldStorage]);
@@ -479,11 +481,55 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
   setGame(protectedCampaign);run('checkpoint()');reply(practiceGame(0));await get('practice-start').onclick();assert.equal(run('practiceSession.id'),demos[0].id);
  }
  // Legacy view entry returns the stored v7 campaign, not the old read-only replay.
- reply(legacy);await get('legacy').onclick();const legacyPracticeStorage=new Map(storage);reply(practiceGame(0));await get('practice-start').onclick();assert.equal(run('practiceSession.returnReplay.version'),7);
+ reply(legacy);await get('legacy').onclick();const legacyPracticeStorage=new Map(storage);reply(practiceGame(0));await get('practice-start').onclick();assert.equal(run('practiceSession.returnReplay.version'),8);
  reply(protectedCampaign);await get('practice-return').onclick();assert.deepEqual([...storage],[...legacyPracticeStorage]);
  // No campaign is invented when starting practice without one; ordinary reload resumes only the real checkpoint.
  const savedForPractice=storage.get(checkpointKey);storage.delete(checkpointKey);run('game=null');reply(practiceGame(0));await get('practice-start').onclick();assert.equal(run('practiceSession.returnReplay'),null);assert.equal(get('practice-return').disabled,true);assert.equal(storage.has(checkpointKey),false);
  reply(start);await get('new').onclick();assert.equal(run('practiceSession'),null);storage.set(checkpointKey,savedForPractice);
  for(const [key,value] of frozenKeys)assert.equal(storage.get(key),value);
- console.log('UI unit tests passed: named snapshot safeguards and write-free prepared practice entry/orders/AI/reset/return, protected campaign restoration, failure/cancel preservation and repeated clicks. Mocked DOM/transport, not browser or human playtesting.');
+ // V8 progression is presentation of Fe rows and forecasts, never reconstructed town/supply/economy rules.
+ const charter=[13,5,5,1],rotation=[13,5,5,2],muster=[13,5,5,3];
+ const developmentRows=[1,2].flatMap(side=>[1,2,3].map(id=>({side,id,known:0,active:0,goldCost:6,foodCost:id===1?0:2,orderCost:1,prerequisite:id===1?0:1,prerequisiteMet:id===1?1:0,town:id===1?5:64,affordable:1,eligible:id===1?1:0})));
+ const researchPreview={...preview,index:1,outcome:9,cost:11,foodCost:4,orderCost:1};
+ const charterProjection={actionIndex:1,blueKnownMask:1,redKnownMask:6,blueActiveMask:1,redActiveMask:2,blueGoldIncome:17,redGoldIncome:18,blueFoodProduction:19,redFoodProduction:20,blueUpkeep:21,redUpkeep:22,blueGoldAfter:23,redGoldAfter:24};
+ const researchTown={...start,tiles:start.tiles.map(t=>t.index===5?{...t,settlement:2,specialty:0}:t),developments:developmentRows,developmentPreviews:[charterProjection],legal:[pass,charter],previews:[{outcome:0},researchPreview]};
+ setGame(researchTown);run('selected=5;render()');assert.equal(get('developments').hidden,false);assert.equal(get('development-list').children.length,6);
+ assert.match(get('development-list').children[0].textContent,/Blue.*Town Charter.*Not researched.*Prerequisite: None \(met\).*6 gold, 0 food, 1 order.*A2.*Affordable: yes.*Eligible now: yes/);
+ assert.match(get('development-list').children[1].textContent,/Crop Rotation.*Town Charter \(not met\).*no qualifying supplied town.*Eligible now: no/);
+ assert.match(get('development-list').children[0].textContent,/Adds 1 kingdom gold income while any town is supplied/);
+ assert.match(get('development-list').children[1].textContent,/Adds 1 food per supplied farm, capped at 2 extra food, while a supplied Granary exists/);
+ assert.match(get('development-list').children[2].textContent,/Infantry recruitment at a supplied Arsenal costs 2 gold instead of 3; food cost, headcount and order cost are unchanged/);
+ let researchButtons=orderButtons(openCards()[0]);assert.equal(researchButtons.length,1);assert.match(researchButtons[0].children[0].textContent,/Research Town Charter at A2.*kingdom knowledge/);
+ assert.match(researchButtons[0].children[1].textContent,/11 gold, 4 food.*Permanent kingdom knowledge.*capture does not transfer/);
+ assert.match(researchButtons[0].children[1].textContent,/Blue known Town Charter; active Town Charter; 23 gold stored; 17 gold income, 19 food production, 21 food upkeep/);
+ assert.match(researchButtons[0].children[1].textContent,/Red known Crop Rotation, Organized Muster; active Crop Rotation; 24 gold stored; 18 gold income, 20 food production, 22 food upkeep/);
+ before=fetches;await run('perform('+JSON.stringify(rotation)+','+JSON.stringify(researchPreview)+')');assert.equal(fetches,before);
+ // Even nonstandard requirements/status/prices are shown verbatim, not inferred from matching buildings or resources.
+ setGame({...researchTown,developments:[{...developmentRows[1],goldCost:13,foodCost:9,orderCost:2,prerequisite:3,prerequisiteMet:1,town:0,affordable:0,eligible:0,known:1,active:0}]});
+ assert.match(get('development-list').children[0].textContent,/Known; benefit suspended.*Organized Muster \(met\).*13 gold, 9 food, 2 orders.*A1.*Affordable: no.*Eligible now: no/);
+ // An eligible-looking row does not create a research order; only the Fe legal list does.
+ setGame({...researchTown,legal:[pass],previews:[{outcome:0}],developments:developmentRows.map(d=>({...d,eligible:1}))});run('selected=5;render()');assert.equal(orderButtons(openCards()[0]).length,0);
+ // Captured and cut-off towns do not transfer/erase knowledge; active/suspended comes only from Fe.
+ for(const [owner,supplied,active] of [[2,1,0],[1,0,0],[1,1,1]]){
+  setGame({...researchTown,tiles:researchTown.tiles.map(t=>t.index===5?{...t,owner,supplied}:t),developments:[{...developmentRows[0],known:1,active,eligible:0}],legal:[pass],previews:[{outcome:0}]});
+  assert.match(get('development-list').children[0].textContent,new RegExp('Known; benefit '+(active?'active':'suspended')));assert.equal(run('game.developments[0].known'),1);
+ }
+ // Fe's discounted infantry quote is used without changing base role-guide prices or computing savings in JS.
+ setGame({...researchTown,tiles:researchTown.tiles.map(t=>t.index===5?{...t,specialty:2}:t),developments:[{...developmentRows[2],known:1,active:1,eligible:0}],legal:[pass,[2,5,5,2]],previews:[{outcome:0},{...preview,cost:2,foodCost:7,orderCost:1}]});run('selected=5;render()');assert.match(orderButtons(openCards()[0])[0].children[1].textContent,/2 gold, 7 food/);
+ // Capture the originating development forecast before a request, not the successor's unrelated action index.
+ setGame(researchTown);run('selected=5;render()');const researched={...researchTown,actions:[charter],state:{...start.state,orders:1},developments:developmentRows.map(d=>d.side===1&&d.id===1?{...d,known:1,active:1,eligible:0}:d),legal:[pass,rotation,muster],previews:[{outcome:0},{...researchPreview,index:1},{...researchPreview,index:2}],developmentPreviews:[{...charterProjection,blueGoldIncome:999}]};
+ reply(researched);before=fetches;const researchClick=orderButtons(openCards()[0])[0],researching=researchClick.onclick();await researchClick.onclick();await researching;assert.equal(fetches,before+1);assert.equal(requests.at(-1).version,8);assert.deepEqual(requests.at(-1).actions,[charter]);
+ assert.match(get('human-activity').textContent,/Researched Town Charter.*17 gold income/);assert.doesNotMatch(get('human-activity').textContent,/999 gold income/);
+ assert.equal(run('replay().developments'),undefined);assert.equal(run('replay().developmentPreviews'),undefined);assert.equal(get('development-list').children[0].textContent.includes('Known; benefit active'),true);
+ // Rejection preserves progression and the successful v8 checkpoint; no research is locally applied.
+ const checkpointBeforeResearchFailure=storage.get(checkpointKey);response={ok:false,json:async()=>({error:'Research rejected'})};await run('perform('+JSON.stringify(rotation)+','+JSON.stringify(researchPreview)+')');assert.equal(run('game.actions.length'),1);assert.equal(storage.get(checkpointKey),checkpointBeforeResearchFailure);
+ // Frozen v7 replay/checkpoint/slots remain isolated and read-only; v8 UI never projects developments onto them.
+ const frontier={...researchTown,version:7,actions:[pass]};reply(frontier);await get('frontiers').onclick();assert.equal(requests.at(-1).version,7);assert.equal(requests.at(-1).mode,1);assert.match(get('status').textContent,/Legacy v7.*read-only/);
+ assert.equal(get('developments').hidden,true);assert.equal(get('development-list').children.length,0);assert.equal(storage.get(checkpointKey),checkpointBeforeResearchFailure);assert.equal(get('frontiers').hidden,false);
+ before=fetches;await run('perform('+JSON.stringify(charter)+','+JSON.stringify(researchPreview)+')');assert.equal(fetches,before);assert.equal(get('snapshot-save').disabled,true);assert.equal(get('snapshot-save').onclick(),false);
+ assert.equal(run('replay().version'),7);assert.equal(storage.get('fe-kingdoms-v7'),frontiersSaved);assert.equal(storage.get('fe-kingdoms-v7-slots-v1'),frontiersSlots);
+ assert.doesNotMatch(run('forecast('+JSON.stringify(charter)+','+JSON.stringify(researchPreview)+')'),/Fe kingdom afterstate/);
+ assert.equal(run('CURRENT_VERSION'),8);assert.equal(run('CHECKPOINT'),'fe-kingdoms-v8');assert.equal(run('SNAPSHOTS'),'fe-kingdoms-v8-slots-v1');
+ assert.ok(demos.every(d=>d.replay.version===8&&/V8-derived.*revalidated under v8 rules/.test(d.source)&&/not a recorded v8 match/.test(d.source)));
+ console.log('UI unit tests passed: v8 Fe-driven development rows/research/forecasts, isolated v1..v8 checkpoints and v7 slots, named snapshot safeguards and write-free prepared practice. Mocked DOM/transport, not browser or human playtesting.');
 })().catch(e=>{console.error(e);process.exitCode=1});
