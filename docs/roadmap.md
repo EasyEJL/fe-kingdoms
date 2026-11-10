@@ -1,28 +1,34 @@
 # Development direction and current scope
 
-The user wants medieval Risk with meaningful resource management and little bookkeeping. Hexes were explicitly prioritized before further mechanics. All authoritative rules and opponent decisions remain in Fe.
+The user wants medieval Risk with meaningful resource management and little bookkeeping. Hexes were prioritized before later mechanics. All authoritative rules and opponent decisions remain in Fe.
 
-## Milestones
+## Implemented milestones
 
-1. **Implemented and committed:** true axial hex topology, matching layout, one-open owned-territory action cards, explicit turn handoff, Fe forecasts and preserved older replays. See ADR 0005 and commit bd40373.
-2. **Implemented and tested, with defensive-stall limits:** strategic ridges/passes, villages/towns, food and capital-connected supply, and three map sizes. See ADR 0006 and commit ef898df. Most self-play pairings still draw; this is a balance limitation, not a rule failure.
-3. **Implemented and verified:** infantry/cavalry/siege roles, explicit composition, paid town training and Fe forecasts. See ADR 0007. No silent conversion or hidden bonuses. The complete regression suite passes. Hard self-play uses specialists; Easy does not reliably develop them. Human feedback must determine how well the roster plays.
+1. **Axial hexes and clarity:** real six-neighbor movement/supply, matching layout, one-open owned-territory action cards, explicit two-order turn handoff and Fe forecasts. Older square replays remain read-only. ADR 0005, commit bd40373.
+2. **Campaign foundations:** three map sizes, terrain chokepoints, villages/towns, food and capital-connected supply. ADR 0006, commit ef898df. Early self-play exposed defensive stalls rather than proving balance.
+3. **Troop roles:** explicit infantry/cavalry/siege composition, recruitment and paid town training, including training at the stack cap. No silent conversion or hidden bonuses. ADR 0007, commit 3b05525.
+4. **Visual map:** terrain/unit vector illustrations, count badges, ownership, zoom/Fit, contextual unit tradeoffs and Fe-projected food meters. ADR 0008, commit 9cc4239. Presentation tests and human playtesting are recorded separately.
+5. **Campaign continuation:** map-size review points at 60/120/180 full rounds; an explicit twenty-round extension or accepted draw instead of a forced time draw. Frozen v4 and larger bounded traces. ADR 0009, commit b1ae2ff.
+6. **Fixed rivers and supply previews:** bridge crossings/defense, exact cached route planning, small shared terrain/unit properties and Fe-backed connected/cut-off counts. Frozen v5. ADR 0010, commit 03e5603.
 
-4. **Isolated visual preview ready:** terrain/unit vector illustrations, role-count badges, clear ownership, zoom/Fit, contextual unit tradeoffs and Fe-projected food meters. See ADR 0008. Separate branch/port preserves the current match; final visual behavior still needs human checking before a live switch.
+Two complete source/docs-informed model-player games against native Fe Easy are documented with replays in [the v6 playtest report](playtests/2026-11-09-v6.md), committed as 5acddb4. These are not novice-human or browser validation. A new human v6 check remains useful.
 
-## After implementation
+## Current low-risk validation work
 
-Retest clarity and enjoyment with a human. Small deterministic bot tournaments catch regressions but do not establish a fun or well-balanced game. Compare order-budget or planning-phase alternatives only if playtest feedback supports them. Water, roads and further economic systems remain optional ideas, not a requirement to add everything at once.
+The separate validation worktree turns the documented games into permanent replay/forecast regressions and audits two-order capital defense using the existing Fe rules and policies. It also prepares a [local engine demonstration checklist](demo-readiness.md). This stage does not change live game files, mechanics or difficulty. Runtime test results and remaining limits belong in validation.md, not assumptions inferred from test names.
 
-The local game stays separate from any Unreal exploration. No remote Git, public publishing, deployment or package registration is authorized by this work. Commit coherent local milestones with their decisions and verification evidence. Stop and report if reliable agent allowance reaches 25% remaining.
+## Next design checkpoints
 
+Human feedback should guide the next mechanics slice and eventual difficulty calibration. Keep the current challenging opponent available when considering a gentler option. Short bot tournaments and single model-player games do not establish enjoyment or broad balance.
 
-## Authorized next campaign slice
+Candidate later mechanics, not accepted implementations:
 
-The next isolated milestone introduces map-size round-review points and explicit continuation, then rivers with fixed bridge crossings and Fe-backed supply previews. Preserve current opponent policies while keeping them competent with the new rules; defer final difficulty calibration until the next mechanics batch settles.
+- Buildable/destroyable bridges and forests harvested for construction materials. These would change both kingdoms' movement/supply and invalidate the current fixed-route cache assumption.
+- Town specialties and distinct unit movement when they create useful decisions without excessive bookkeeping.
+- Roads or further economic systems only where playtesting supports them.
 
-Buildable/destroyable bridges and forests harvested for construction materials are candidate future mechanics from the user, not committed scope for the fixed-crossing slice. Such changes would affect both kingdoms' movement, supply and planning. Town specialties and distinct troop movement remain later candidates where they create useful decisions. Prefer small shared terrain/unit definitions when repeated rules justify them; do not introduce a generic game framework.
+Prefer small shared terrain/unit definitions when repeated rules justify them. Do not build a generic game framework. Compare a different order budget or planning phase only if evidence supports that change; the current two-order rule remains.
 
-5. **Implemented and verified in v5:** map-size review points (60/120/180 full rounds), explicit twenty-round continuation or accepted draw, frozen v4 replay and larger bounded traces. See ADR 0009. Final difficulty calibration remains deferred. Next: fixed rivers/bridges and exact Fe-backed supply previews.
+## Boundaries
 
-6. **Implemented and verified in v6:** fixed river crossings, bridge defense, exact route-aware planning, lightweight shared terrain/unit properties and Fe-backed connected/cut-off territory previews. See ADR 0010. Both policies meet directed bridge/supply tactics. This does not establish broad strategic strength or beginner difficulty. Next checkpoint: human/simulated-player playtests before adding specialties, different movement or mutable bridges.
+Keep this project separate from Dragonstales, the preserved transition prototype and any Unreal exploration. No remote Git, publishing, deployment, package registration or contest submission is authorized by these local milestones. Preserve live browser matches and versioned replays. Commit coherent local changes with their decisions and actual verification evidence. Stop and report if reliable agent allowance reaches 25% remaining or cannot be measured.

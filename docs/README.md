@@ -31,3 +31,7 @@ Add an ADR for a meaningful architectural or rules decision, not every implement
 - [ADR 0010: Fixed rivers and supply forecasts](adr/0010-fixed-rivers-supply-previews.md).
 
 - [V6 simulated-player playtest and replays](playtests/2026-11-09-v6.md): two complete model-versus-Fe matches, with limits distinguished from human/browser validation.
+
+- [Local Fe demonstration and readiness checklist](demo-readiness.md): a reproducible engine demonstration, evidence boundaries and unresolved contest requirements.
+
+- [V6 capital-threat audit](tactical-review-v6.md): bounded native evidence for two-order defense, with Easy/Hard differences and limits.

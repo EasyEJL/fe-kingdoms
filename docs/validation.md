@@ -76,3 +76,15 @@ Independent source review found no remaining blocking defects and independently 
 After commit 03e5603, a source/docs-informed Sol 6.1 player completed fresh Small and Medium matches against actual native Fe Easy over HTTP. Both ended in Blue capital victories: 70 actions/17 completed rounds and 50 actions/12 completed rounds. The final full responses replayed exactly, and every selected Blue forecast matched 19 resulting fields (62 orders, zero mismatches). Both replay comparisons were independently repeated. See [the playtest report and compact replays](playtests/2026-11-09-v6.md).
 
 This is separate from native self-play and automated HTTP regression. It is not novice-human/browser testing or a broad balance conclusion. Learning from Small confounds the shorter Medium win. No production files, existing browser checkpoints or servers were changed during these tests. Repelled Red attacks dealt damage and had possible attrition/economy reasons; the report does not assert they are proven AI defects.
+
+## Isolated v6 validation milestone, 2026-11-10
+
+The full `scripts/verify.ps1` run passed in C:\Users\Eric\dev\fe-kingdoms-validation. Production engine/native, server, UI and the two documented replay inputs remain byte-identical to 5acddb4; no live server or browser checkpoint was changed.
+
+New coverage: six playtest-replay tests check 122 prefixes, all 120 recorded Blue/Red order forecasts against 21 applied fields, exact terminal-response digests, final composition, supply cuts/recapture/attrition, repeat determinism and five corrupted histories. The final aggregate ran this suite in 3.237 seconds. Both fixture JSON hashes are now included in aggregate provenance.
+
+Two native capital-defense puzzles enumerate 185/738 full Red turns and all immediate Blue finishes, finding 120/nine defenses. Hard leaves zero Blue winning continuations in both; Easy's one/two misses are diagnostic rather than required failures. Historical positive controls prove the oracle can find the recorded winning lines independently of current policy choices. The repeated bounded audits took about 4.675/30.213 seconds. This is a next-turn survival check, not proof of eventual victory. See [the tactical review](tactical-review-v6.md).
+
+The aggregate also passed the existing 32 Fe unit tests, 14 adapter tests, four campaign/legacy suites, mocked UI checks, six bounded 24-action self-play samples, ten malformed native inputs and the complete 62-action/48-request HTTP win. The samples remain unfinished budget stops, not draws. No new human or real-browser playtest was performed.
+
+Independent review found and resolved a possible false pass in the tactical oracle: a broken always-zero win result could previously satisfy its negative assertions. The added historical positive controls close that gap without forcing Easy to remain weak. Source and nonnative checks found no remaining blocking issue; the full native aggregate was then executed successfully. A reproducible [local Fe demo checklist](demo-readiness.md) was added without claiming contest eligibility or selecting publication/license terms.
