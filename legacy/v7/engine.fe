@@ -1,0 +1,874 @@
+use core::marker::Copy
+
+// Crownlines v7 (unreleased). Fe owns every rule and opponent decision.
+// Fixed capacities bound memory; scenario metadata selects active map cells.
+const MAX_TILES: usize = 64
+const MAX_ACTIONS: usize = 1024
+const MAX_TROOPS: i64 = 12
+const RESOURCE_CAP: i64 = 40
+const TRACE_CAPACITY: usize = 2048
+const EXTENSION_ROUNDS: i64 = 20
+
+struct State {
+    owner: [i64; 64],
+    troops: [i64; 64],
+    cavalry: [i64; 64],
+    siege: [i64; 64],
+    fort: [i64; 64],
+    settlement: [i64; 64],
+    specialty: [i64; 64],
+    bridge_mask: usize,
+    gold: [i64; 3],
+    food: [i64; 3],
+    scenario: usize,
+    side: i64,
+    orders: i64,
+    turn: i64,
+    result: i64,
+    passes: i64,
+    completed_rounds: i64,
+    round_limit: i64,
+    decision_pending: bool,
+}
+impl Copy for State {}
+// Infantry is the remainder of total troops after the two specialist counts.
+struct Army { infantry: i64, cavalry: i64, siege: i64 }
+impl Copy for Army {}
+struct Action { kind: i64, from: usize, to: usize, amount: i64 }
+impl Copy for Action {}
+struct Actions { items: [Action; 1024], len: usize }
+impl Copy for Actions {}
+struct Search { nodes: i64 }
+struct Focus { kind: i64, target: usize }
+impl Copy for Focus {}
+// Components: material, resources, supply, economy, position, pressure,
+// current root focus, and terminal outcome. These sum to the actual score.
+struct Evaluation { parts: [i64; 8] }
+impl Copy for Evaluation {}
+struct Decision {
+    action: Action, side: i64, focus: Focus, depth: i64, nodes: i64,
+    search_score: i64, before_score: i64, after_score: i64,
+    deltas: [i64; 8], highlight: i64, order_cost: i64,
+}
+impl Copy for Decision {}
+struct DecisionHistory { items: [Decision; 2], trace_indices: [usize; 2], len: usize }
+// Two permanent construction sites give four bounded topology variants.
+// Every trial position selects its own mask, not the decision root's mask.
+struct Navigation { blue: [[i64; 64]; 4], red: [[i64; 64]; 4] }
+struct TerrainProfile { walkable: bool, defense_bonus: i64, open_ground: bool }
+struct UnitProfile {
+    recruit_gold: i64, recruit_food: i64, recruit_count: i64,
+    open_attack_bonus: i64, fortified_attack_bonus: i64,
+}
+struct SupplyCount { connected: i64, cut_off: i64 }
+impl Copy for SupplyCount {}
+fn terrain_profile(_ ground: i64) -> TerrainProfile {
+    TerrainProfile {
+        walkable: ground != 5 && ground != 8,
+        defense_bonus: if ground == 3 || ground == 7 || ground == 9 { 1 } else { 0 },
+        open_ground: ground == 0 || ground == 1,
+    }
+}
+fn unit_profile(_ role: i64) -> UnitProfile {
+    if role == 0 { UnitProfile { recruit_gold: 3, recruit_food: 2, recruit_count: 2, open_attack_bonus: 0, fortified_attack_bonus: 0 } }
+    else if role == 1 { UnitProfile { recruit_gold: 4, recruit_food: 2, recruit_count: 1, open_attack_bonus: 1, fortified_attack_bonus: 0 } }
+    else { UnitProfile { recruit_gold: 5, recruit_food: 3, recruit_count: 1, open_attack_bonus: 0, fortified_attack_bonus: 2 } }
+}
+// Legality supplies the connection flag from its existing supply traversal.
+// apply() calls this only for a validated, supplied recruitment/training order.
+fn recruitment_gold(_ s: State, _ tile: usize, _ role: i64, _ supplied: bool) -> i64 {
+    unit_profile(role).recruit_gold -
+        if supplied && role > 0 && s.settlement[tile] == 2 && s.specialty[tile] == 2 { 1 } else { 0 }
+}
+struct Economy {
+    gold_income: i64,
+    food_production: i64,
+    food_upkeep: i64,
+    disconnected: i64,
+    shortage: i64,
+}
+impl Copy for Economy {}
+
+fn imin(_ a: i64, _ b: i64) -> i64 { if a < b { a } else { b } }
+fn imax(_ a: i64, _ b: i64) -> i64 { if a > b { a } else { b } }
+fn abs(_ n: i64) -> i64 { if n < 0 { -n } else { n } }
+fn pass() -> Action { Action { kind: 0, from: 0, to: 0, amount: 0 } }
+fn extend_campaign() -> Action { Action { kind: 9, from: 0, to: 0, amount: 0 } }
+fn accept_draw() -> Action { Action { kind: 10, from: 0, to: 0, amount: 0 } }
+fn base_round_limit(_ scenario: usize) -> i64 {
+    if scenario == 0 { 60 } else if scenario == 1 { 120 } else { 180 }
+}
+fn map_width(_ s: State) -> usize {
+    if s.scenario == 0 { 5 } else if s.scenario == 1 { 7 } else { 9 }
+}
+fn map_height(_ s: State) -> usize { if s.scenario == 0 { 3 } else { 5 } }
+fn tile_count(_ s: State) -> usize { map_width(s) * map_height(s) }
+fn capital(_ s: State, _ side: i64) -> usize {
+    if side == 1 { 0 } else { tile_count(s) - 1 }
+}
+
+// AXIAL GEOMETRY AND MAPS
+// q = column, r = row. Fixed bridges always remain; two bank sites can be built.
+fn hex_distance(_ s: State, _ a: usize, _ b: usize) -> i64 {
+    let width = map_width(s)
+    let aq: i64 = (a % width).downcast_unchecked()
+    let ar: i64 = (a / width).downcast_unchecked()
+    let bq: i64 = (b % width).downcast_unchecked()
+    let br: i64 = (b / width).downcast_unchecked()
+    (abs(aq - bq) + abs(ar - br) + abs(aq - bq + ar - br)) / 2
+}
+fn neighbor(_ s: State, _ tile: usize, _ direction: usize) -> usize {
+    let width: i64 = map_width(s).downcast_unchecked()
+    let height: i64 = map_height(s).downcast_unchecked()
+    let mut_q: i64 = (tile % map_width(s)).downcast_unchecked()
+    let mut_r: i64 = (tile / map_width(s)).downcast_unchecked()
+    var q = mut_q
+    var r = mut_r
+    if direction == 0 { q += 1 }
+    else if direction == 1 { q -= 1 }
+    else if direction == 2 { r += 1 }
+    else if direction == 3 { r -= 1 }
+    else if direction == 4 { q += 1
+        r -= 1 }
+    else { q -= 1
+        r += 1 }
+    if q < 0 || q >= width || r < 0 || r >= height { return MAX_TILES }
+    (r * width + q).downcast_unchecked()
+}
+fn adjacent(_ s: State, _ a: usize, _ b: usize) -> bool {
+    a < tile_count(s) && b < tile_count(s) && hex_distance(s, a, b) == 1
+}
+fn is_pass_row(_ s: State, _ row: usize) -> bool {
+    if s.scenario == 0 { row == 1 } else { row == 1 || row == 3 }
+}
+fn crossing_bit(_ s: State, _ i: usize) -> usize {
+    if i == map_width(s) / 2 { 1 }
+    else if i == (map_height(s) - 1) * map_width(s) + map_width(s) / 2 { 2 }
+    else { 0 }
+}
+fn constructed_bridge(_ s: State, _ i: usize) -> bool {
+    let bit = crossing_bit(s, i)
+    bit > 0 && (s.bridge_mask / bit) % 2 == 1
+}
+fn terrain(_ s: State, _ i: usize) -> i64 {
+    let width = map_width(s)
+    let height = map_height(s)
+    let last = tile_count(s) - 1
+    let q = i % width
+    let r = i / width
+    if i == 0 || i == last { return 4 }
+    if i == width - 1 || i == (height - 1) * width { return 5 }
+    if q == width / 2 {
+        if is_pass_row(s, r) || constructed_bridge(s, i) { return 9 }
+        return 8
+    }
+    if height > 3 && r == height / 2 && (q == width / 2 - 1 || q == width / 2 + 1) { return 8 }
+    if i == 1 || i == last - 1
+        || i == (height - 1) * width + 1
+        || i == width - 2 { return 1 }
+    if (r == height / 2 && (q == 0 || q == width - 1))
+        || (height > 3 && r == 0 && q == width / 2 - 1)
+        || (height > 3 && r == height - 1 && q == width / 2 + 1) { return 3 }
+    if (r == 1 && q == width / 2 - 1)
+        || (r == height - 2 && q == width / 2 + 1) { return 10 }
+    0
+}
+fn passable(_ s: State, _ i: usize) -> bool {
+    i < tile_count(s) && terrain_profile(terrain(s, i)).walkable
+}
+// Exact current-topology BFS. Ownership does not obstruct movement distance;
+// ownership-sensitive connectivity is calculated separately by supply().
+fn route_distances(_ s: State, _ start: usize) -> [i64; 64] {
+    var distance: [i64; 64] = [1000; 64]
+    var queue: [usize; 64] = [0; 64]
+    if !passable(s, start) { return distance }
+    distance[start] = 0
+    queue[0] = start
+    var head: usize = 0
+    var tail: usize = 1
+    while head < tail {
+        let current = queue[head]
+        head += 1
+        for direction in 0 .. 6 {
+            let next = neighbor(s, current, direction)
+            if next < tile_count(s) && passable(s, next) && distance[next] == 1000 {
+                distance[next] = distance[current] + 1
+                queue[tail] = next
+                tail += 1
+            }
+        }
+    }
+    distance
+}
+fn travel_distance(_ s: State, _ a: usize, _ b: usize) -> i64 { route_distances(s, a)[b] }
+fn navigation(_ s: State) -> Navigation {
+    var blue: [[i64; 64]; 4] = [[1000; 64]; 4]
+    var red: [[i64; 64]; 4] = [[1000; 64]; 4]
+    for mask in 0 .. 4 {
+        var variant = s
+        variant.bridge_mask = mask
+        blue[mask] = route_distances(variant, capital(variant, 1))
+        red[mask] = route_distances(variant, capital(variant, 2))
+    }
+    Navigation { blue, red }
+}
+
+// ARMY COMPOSITION AND DETERMINISTIC DETACHMENTS
+fn army_at(_ s: State, _ tile: usize) -> Army {
+    Army {
+        infantry: s.troops[tile] - s.cavalry[tile] - s.siege[tile],
+        cavalry: s.cavalry[tile], siege: s.siege[tile],
+    }
+}
+fn army_size(_ army: Army) -> i64 { army.infantry + army.cavalry + army.siege }
+fn empty_army() -> Army { Army { infantry: 0, cavalry: 0, siege: 0 } }
+fn place_army(_ tile: usize, _ army: Army) uses (state: mut State) {
+    state.troops[tile] = army_size(army)
+    state.cavalry[tile] = army.cavalry
+    state.siege[tile] = army.siege
+}
+fn combine_armies(_ a: Army, _ b: Army) -> Army {
+    Army { infantry: a.infantry + b.infantry, cavalry: a.cavalry + b.cavalry, siege: a.siege + b.siege }
+}
+fn subtract_armies(_ a: Army, _ b: Army) -> Army {
+    Army { infantry: a.infantry - b.infantry, cavalry: a.cavalry - b.cavalry, siege: a.siege - b.siege }
+}
+// Reserve one garrison (infantry, then cavalry, then siege). Distribute the
+// requested move proportionally from the mobile pool. Largest remainders win;
+// ties prefer infantry, then cavalry, then siege. No unit changes its type.
+fn detachment(_ army: Army, _ amount: i64) -> Army {
+    let mobile_total = army_size(army) - 1
+    assert(amount > 0 && amount <= mobile_total)
+    var mobile = [army.infantry, army.cavalry, army.siege]
+    if mobile[0] > 0 { mobile[0] -= 1 }
+    else if mobile[1] > 0 { mobile[1] -= 1 }
+    else { mobile[2] -= 1 }
+    var selected = [0; 3]
+    var remainders = [0; 3]
+    var assigned: i64 = 0
+    for role in 0 .. 3 {
+        selected[role] = mobile[role] * amount / mobile_total
+        remainders[role] = mobile[role] * amount % mobile_total
+        assigned += selected[role]
+    }
+    while assigned < amount {
+        var best: usize = 0
+        var largest: i64 = -1
+        for role in 0 .. 3 {
+            if selected[role] < mobile[role] && remainders[role] > largest {
+                best = role
+                largest = remainders[role]
+            }
+        }
+        assert(largest >= 0)
+        selected[best] += 1
+        remainders[best] = -1
+        assigned += 1
+    }
+    Army { infantry: selected[0], cavalry: selected[1], siege: selected[2] }
+}
+// Infantry shields the specialists. This same loss order handles combat,
+// disconnected attrition and food shortages.
+fn lose_troops(_ before: Army, _ casualties: i64) -> Army {
+    var army = before
+    var remaining = casualties
+    let infantry_loss = imin(army.infantry, remaining)
+    army.infantry -= infantry_loss
+    remaining -= infantry_loss
+    let cavalry_loss = imin(army.cavalry, remaining)
+    army.cavalry -= cavalry_loss
+    remaining -= cavalry_loss
+    army.siege -= imin(army.siege, remaining)
+    army
+}
+fn attack_power(_ s: State, _ target: usize, _ army: Army) -> i64 {
+    var strength = army_size(army)
+    let ground = terrain(s, target)
+    if terrain_profile(ground).open_ground { strength += army.cavalry * unit_profile(1).open_attack_bonus }
+    if s.fort[target] > 0 || s.settlement[target] > 0 || ground == 4 {
+        strength += army.siege * unit_profile(2).fortified_attack_bonus
+    }
+    strength
+}
+fn capture_losses(_ army: Army, _ power: i64, _ defense_power: i64) -> i64 {
+    let count = army_size(army)
+    // Infantry-only battles reduce to the previous count-minus-defense rule.
+    imin(count - 1, (defense_power * count + power - 1) / power)
+}
+// Only the actual moving detachment pays terrain/role costs. A small infantry
+// detachment can therefore leave cavalry or siege behind and still cost one.
+// Mixed armies pay the maximum role cost, never a sum beyond the two-order turn.
+fn move_order_cost(_ s: State, _ target: usize, _ moving: Army) -> i64 {
+    if moving.siege > 0 || (moving.cavalry > 0 && terrain(s, target) == 10) { 2 } else { 1 }
+}
+fn order_cost(_ s: State, _ action: Action) -> i64 {
+    if action.kind == 9 || action.kind == 10 { return 0 }
+    if action.kind == 0 { return s.orders }
+    if action.kind == 1 { return move_order_cost(s, action.to, detachment(army_at(s, action.from), action.amount)) }
+    1
+}
+
+// INITIAL STATE AND SUPPLY
+fn initial(_ scenario: usize) -> State {
+    assert(scenario <= 2)
+    var s = State {
+        owner: [0; 64], troops: [0; 64], cavalry: [0; 64], siege: [0; 64], fort: [0; 64], settlement: [0; 64], specialty: [0; 64],
+        bridge_mask: 0, gold: [0, 8, 8], food: [0, 12, 12], scenario,
+        side: 1, orders: 2, turn: 1, result: 0, passes: 0,
+        completed_rounds: 0, round_limit: base_round_limit(scenario), decision_pending: false,
+    }
+    let width = map_width(s)
+    let last = tile_count(s) - 1
+    for i in 0 .. tile_count(s) {
+        if passable(s, i) { s.troops[i] = 1 }
+    }
+    s.owner[0] = 1
+    s.owner[1] = 1
+    s.owner[width] = 1
+    s.owner[last] = 2
+    s.owner[last - 1] = 2
+    s.owner[last - width] = 2
+    s.troops[0] = 6
+    s.troops[last] = 6
+    s.troops[1] = 3
+    s.troops[last - 1] = 3
+    s.fort[0] = 1
+    s.fort[last] = 1
+    s.settlement[width] = 1
+    s.settlement[last - width] = 1
+    let village = if scenario == 0 { width + width / 2 - 1 } else { width + width / 2 - 2 }
+    s.settlement[village] = 1
+    s.settlement[last - village] = 1
+    s
+}
+fn supply(_ s: State, _ side: i64) -> [bool; 64] {
+    var connected = [false; 64]
+    var queue: [usize; 64] = [0; 64]
+    let home = capital(s, side)
+    if s.owner[home] != side { return connected }
+    connected[home] = true
+    queue[0] = home
+    var head: usize = 0
+    var tail: usize = 1
+    while head < tail {
+        let current = queue[head]
+        head += 1
+        for direction in 0 .. 6 {
+            let next = neighbor(s, current, direction)
+            if next < tile_count(s) && !connected[next] && s.owner[next] == side
+                && passable(s, next) {
+                connected[next] = true
+                queue[tail] = next
+                tail += 1
+            }
+        }
+    }
+    connected
+}
+fn army_upkeep(_ troops: i64) -> i64 { (troops - 1 + 2) / 3 }
+fn supply_count(_ s: State, _ side: i64) -> SupplyCount {
+    let connected = supply(s, side)
+    var count = SupplyCount { connected: 0, cut_off: 0 }
+    for i in 0 .. tile_count(s) {
+        if s.owner[i] == side && passable(s, i) {
+            if connected[i] { count.connected += 1 } else { count.cut_off += 1 }
+        }
+    }
+    count
+}
+fn economy_with_supply(_ s: State, _ side: i64, _ connected: [bool; 64]) -> Economy {
+    var result = Economy {
+        gold_income: 2, food_production: 3, food_upkeep: 0,
+        disconnected: 0, shortage: 0,
+    }
+    for i in 0 .. tile_count(s) {
+        if s.owner[i] == side {
+            if connected[i] {
+                result.gold_income += s.settlement[i]
+                if terrain(s, i) == 1 { result.food_production += 2 }
+                if s.specialty[i] == 1 { result.food_production += 2 }
+                result.food_upkeep += army_upkeep(s.troops[i])
+            } else { result.disconnected += 1 }
+        }
+    }
+    let player: usize = side.downcast_unchecked()
+    let available = imin(RESOURCE_CAP, s.food[player] + result.food_production)
+    result.shortage = imax(0, result.food_upkeep - available)
+    result
+}
+fn economy(_ s: State, _ side: i64) -> Economy {
+    economy_with_supply(s, side, supply(s, side))
+}
+// This same routine supplies forecasts and actual turn-start consequences.
+fn begin_turn(_ before: State) -> State {
+    var s = before
+    let connected = supply(s, s.side)
+    let budget = economy_with_supply(s, s.side, connected)
+    let player: usize = s.side.downcast_unchecked()
+    s.gold[player] = imin(RESOURCE_CAP, s.gold[player] + budget.gold_income)
+    s.food[player] = imax(0, imin(RESOURCE_CAP, s.food[player] + budget.food_production) - budget.food_upkeep)
+    for i in 0 .. tile_count(s) {
+        if s.owner[i] == s.side && !connected[i] && s.troops[i] > 1 {
+            let survivors = lose_troops(army_at(s, i), 1)
+            with (State = s) { place_army(i, survivors) }
+        }
+    }
+    // Each missing ration removes one mobile troop, strongest armies first.
+    // Tie order is mirrored for the two kingdoms to preserve map symmetry.
+    var remaining = budget.shortage
+    while remaining > 0 {
+        var chosen: usize = MAX_TILES
+        var strongest: i64 = 1
+        for index in 0 .. tile_count(s) {
+            let i = if s.side == 1 { index } else { tile_count(s) - 1 - index }
+            if s.owner[i] == s.side && connected[i] && s.troops[i] > strongest {
+                strongest = s.troops[i]
+                chosen = i
+            }
+        }
+        if chosen == MAX_TILES { break }
+        let survivors = lose_troops(army_at(s, chosen), 1)
+        with (State = s) { place_army(chosen, survivors) }
+        remaining -= 1
+    }
+    s
+}
+
+// LEGAL ORDERS
+fn empty_actions() -> Actions { Actions { items: [pass(); 1024], len: 0 } }
+fn add(_ action: Action) uses (list: mut Actions) {
+    assert(list.len < MAX_ACTIONS)
+    list.items[list.len] = action
+    list.len += 1
+}
+fn settlement_cost(_ level: i64) -> i64 { if level == 1 { 6 } else { 8 } }
+fn legal(_ s: State) -> Actions {
+    var result = empty_actions()
+    if s.result != 0 { return result }
+    if s.decision_pending {
+        with (Actions = result) { add(extend_campaign())
+            add(accept_draw()) }
+        return result
+    }
+    let connected = supply(s, s.side)
+    let player: usize = s.side.downcast_unchecked()
+    with (Actions = result) {
+        add(pass())
+        for i in 0 .. tile_count(s) {
+            if s.owner[i] == s.side && passable(s, i) {
+                if connected[i] {
+                    if s.gold[player] >= unit_profile(0).recruit_gold && s.food[player] >= unit_profile(0).recruit_food && s.troops[i] <= MAX_TROOPS - unit_profile(0).recruit_count
+                        && (terrain(s, i) == 4 || s.settlement[i] > 0) {
+                        add(Action { kind: 2, from: i, to: i, amount: 2 })
+                    }
+                    if s.settlement[i] == 2 && s.troops[i] < MAX_TROOPS {
+                        if s.gold[player] >= recruitment_gold(s, i, 1, true) && s.food[player] >= unit_profile(1).recruit_food {
+                            add(Action { kind: 5, from: i, to: i, amount: 1 })
+                        }
+                        if s.gold[player] >= recruitment_gold(s, i, 2, true) && s.food[player] >= unit_profile(2).recruit_food {
+                            add(Action { kind: 6, from: i, to: i, amount: 1 })
+                        }
+                    }
+                    // Training is an explicit paid conversion, useful at the stack cap.
+                    // It never happens implicitly during movement or friendly merging.
+                    if s.settlement[i] == 2 && army_at(s, i).infantry > 0 {
+                        if s.gold[player] >= recruitment_gold(s, i, 1, true) && s.food[player] >= unit_profile(1).recruit_food {
+                            add(Action { kind: 7, from: i, to: i, amount: 1 })
+                        }
+                        if s.gold[player] >= recruitment_gold(s, i, 2, true) && s.food[player] >= unit_profile(2).recruit_food {
+                            add(Action { kind: 8, from: i, to: i, amount: 1 })
+                        }
+                    }
+                    if s.gold[player] >= 2 && s.fort[i] < 2 {
+                        add(Action { kind: 3, from: i, to: i, amount: 1 })
+                    }
+                    if terrain(s, i) != 4 && s.settlement[i] < 2
+                        && s.gold[player] >= settlement_cost(s.settlement[i] + 1) {
+                        add(Action { kind: 4, from: i, to: i, amount: s.settlement[i] + 1 })
+                    }
+                    if s.settlement[i] == 2 && s.specialty[i] == 0 && s.gold[player] >= 6 && s.food[player] >= 2 {
+                        add(Action { kind: 11, from: i, to: i, amount: 1 })
+                        add(Action { kind: 11, from: i, to: i, amount: 2 })
+                    }
+                    // A supplied land bank builds shared infrastructure, not
+                    // territory. Construction does not claim or garrison it.
+                    if terrain(s, i) != 9 && s.gold[player] >= 6 && s.food[player] >= 2 {
+                        for direction in 0 .. 6 {
+                            let target = neighbor(s, i, direction)
+                            if target < tile_count(s) && crossing_bit(s, target) > 0 && !constructed_bridge(s, target) {
+                                add(Action { kind: 12, from: i, to: target, amount: 1 })
+                            }
+                        }
+                    }
+                }
+                if s.troops[i] > 1 {
+                    for direction in 0 .. 6 {
+                        let target = neighbor(s, i, direction)
+                        if target < tile_count(s) && passable(s, target) {
+                            let full = s.troops[i] - 1
+                            let half = s.troops[i] / 2
+                            let full_move = Action { kind: 1, from: i, to: target, amount: full }
+                            let half_move = Action { kind: 1, from: i, to: target, amount: half }
+                            if order_cost(s, full_move) <= s.orders && (s.owner[target] != s.side || s.troops[target] + full <= MAX_TROOPS) {
+                                add(full_move)
+                            }
+                            if half != full && order_cost(s, half_move) <= s.orders && (s.owner[target] != s.side || s.troops[target] + half <= MAX_TROOPS) {
+                                add(half_move)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    result
+}
+fn same_action(_ a: Action, _ b: Action) -> bool {
+    a.kind == b.kind && a.from == b.from && a.to == b.to && a.amount == b.amount
+}
+fn is_legal(_ s: State, _ action: Action) -> bool {
+    let choices = legal(s)
+    for i in 0 .. choices.len { if same_action(action, choices.items[i]) { return true } }
+    false
+}
+fn defense(_ s: State, _ tile: usize) -> i64 {
+    if s.troops[tile] == 0 { return 0 }
+    s.troops[tile] + s.fort[tile] + terrain_profile(terrain(s, tile)).defense_bonus
+        + if terrain(s, tile) == 10 && army_at(s, tile).infantry > 0 { 1 } else { 0 }
+}
+
+// AUTHORITATIVE TRANSITION
+// Call only after validating, or with an action returned by legal().
+fn apply(_ before: State, _ action: Action) -> State {
+    var s = before
+    // Campaign decisions are recorded actions, never combat orders. The next
+    // Blue turn has not begun yet, so extension pays its income exactly once.
+    if action.kind == 9 {
+        s.decision_pending = false
+        s.round_limit += EXTENSION_ROUNDS
+        s.side = 1
+        s.orders = 2
+        s.turn += 1
+        return begin_turn(s)
+    }
+    if action.kind == 10 {
+        s.decision_pending = false
+        s.result = 3
+        return s
+    }
+    let player: usize = s.side.downcast_unchecked()
+    if action.kind == 0 {
+        s.passes += 1
+        s.orders = 0
+    } else {
+        s.passes = 0
+        s.orders -= order_cost(before, action)
+        if action.kind == 2 {
+            let profile = unit_profile(0)
+            s.gold[player] -= profile.recruit_gold
+            s.food[player] -= profile.recruit_food
+            s.troops[action.from] += profile.recruit_count
+        } else if action.kind == 3 {
+            s.gold[player] -= 2
+            s.fort[action.from] += 1
+        } else if action.kind == 4 {
+            s.gold[player] -= settlement_cost(action.amount)
+            s.settlement[action.from] = action.amount
+        } else if action.kind >= 5 && action.kind <= 8 {
+            let cavalry = action.kind == 5 || action.kind == 7
+            let profile = unit_profile(if cavalry { 1 } else { 2 })
+            s.gold[player] -= recruitment_gold(s, action.from, if cavalry { 1 } else { 2 }, true)
+            s.food[player] -= profile.recruit_food
+            if action.kind < 7 { s.troops[action.from] += profile.recruit_count }
+            if cavalry { s.cavalry[action.from] += 1 }
+            else { s.siege[action.from] += 1 }
+        } else if action.kind == 11 {
+            s.gold[player] -= 6
+            s.food[player] -= 2
+            s.specialty[action.from] = action.amount
+        } else if action.kind == 12 {
+            s.gold[player] -= 6
+            s.food[player] -= 2
+            s.bridge_mask += crossing_bit(s, action.to)
+        } else {
+            let moving = detachment(army_at(s, action.from), action.amount)
+            let garrison = subtract_armies(army_at(s, action.from), moving)
+            with (State = s) { place_army(action.from, garrison) }
+            if s.owner[action.to] == s.side {
+                let combined = combine_armies(army_at(s, action.to), moving)
+                with (State = s) { place_army(action.to, combined) }
+            } else {
+                let defense_power = defense(s, action.to)
+                let power = attack_power(s, action.to, moving)
+                if power > defense_power {
+                    let survivors = lose_troops(moving, capture_losses(moving, power, defense_power))
+                    s.owner[action.to] = s.side
+                    with (State = s) { place_army(action.to, survivors) }
+                    s.fort[action.to] = 0
+                } else {
+                    let protection = defense_power - s.troops[action.to]
+                    let casualties = imin(s.troops[action.to] - 1, imax(1, power - protection))
+                    let survivors = lose_troops(army_at(s, action.to), casualties)
+                    with (State = s) { place_army(action.to, survivors) }
+                }
+            }
+        }
+    }
+    if s.owner[capital(s, 1)] == 2 { s.result = 2 }
+    if s.owner[capital(s, 2)] == 1 { s.result = 1 }
+    if s.result != 0 { return s }
+    if s.orders == 0 {
+        // A full round completes only after Red finishes its turn. Capital
+        // capture already returned above; four passes precede any decision.
+        if s.side == 2 { s.completed_rounds += 1 }
+        if s.passes < 4 && s.side == 2 && s.completed_rounds >= s.round_limit {
+            s.decision_pending = true
+            return s
+        }
+        s.side = 3 - s.side
+        s.orders = 2
+        s.turn += 1
+        if s.passes >= 4 { s.result = 3
+            return s }
+        return begin_turn(s)
+    }
+    s
+}
+
+// OPPONENT EVALUATION AND BOUNDED SEARCH
+// These are potential direct attacks on the next opposing turn, not proof
+// that an opponent can force a win through a multi-order sequence.
+fn direct_capital_threats(_ s: State, _ root: i64) -> i64 {
+    let home = capital(s, root)
+    var threats: i64 = 0
+    for direction in 0 .. 6 {
+        let source = neighbor(s, home, direction)
+        if source < tile_count(s) && s.owner[source] == 3 - root && s.troops[source] > 1 {
+            let moving = detachment(army_at(s, source), s.troops[source] - 1)
+            if attack_power(s, home, moving) > defense(s, home) { threats += 1 }
+        }
+    }
+    threats
+}
+fn select_focus(_ s: State, _ root: i64) -> Focus {
+    if direct_capital_threats(s, root) > 0 { return Focus { kind: 1, target: capital(s, root) } }
+    let connected = supply(s, root)
+    var target: usize = MAX_TILES
+    var importance: i64 = -1
+    for index in 0 .. tile_count(s) {
+        let i = if root == 1 { index } else { tile_count(s) - 1 - index }
+        if s.owner[i] == root && !connected[i] {
+            let value = 24 + s.troops[i] * 12 + s.settlement[i] * 18 + if s.specialty[i] > 0 { 18 } else { 0 }
+            if value > importance { target = i
+                importance = value }
+        }
+    }
+    if target < MAX_TILES { return Focus { kind: 2, target } }
+    let budget = economy_with_supply(s, root, connected)
+    let player: usize = root.downcast_unchecked()
+    if budget.shortage > 0 || (budget.food_upkeep > budget.food_production && s.food[player] < budget.food_upkeep * 2) {
+        return Focus { kind: 3, target: MAX_TILES }
+    }
+    // Ordinary advancement already has positional and pressure weights.
+    // Keep its extra focus bonus zero to preserve the normal policy.
+    Focus { kind: 4, target: capital(s, 3 - root) }
+}
+fn evaluation_total(_ value: Evaluation) -> i64 {
+    var total: i64 = 0
+    for i in 0 .. 8 { total += value.parts[i] }
+    total
+}
+fn evaluate(_ s: State, _ root: i64) -> i64 {
+    let routes = navigation(s)
+    with (Navigation = routes) { evaluate_cached(s, root) }
+}
+fn evaluate_cached(_ s: State, _ root: i64) -> i64 uses (routes: Navigation) {
+    evaluation_total(breakdown_cached(s, root, Focus { kind: 4, target: capital(s, 3 - root) }))
+}
+fn breakdown_cached(_ s: State, _ root: i64, _ focus: Focus) -> Evaluation uses (routes: Navigation) {
+    var parts = [0; 8]
+    if s.result != 0 {
+        if s.result == root { parts[7] = 100000 - s.turn }
+        else if s.result == 3 - root { parts[7] = -100000 + s.turn }
+        return Evaluation { parts }
+    }
+    let player: usize = root.downcast_unchecked()
+    let opponent: usize = (3 - root).downcast_unchecked()
+    parts[1] = (s.gold[player] - s.gold[opponent]) * 2
+        + (s.food[player] - s.food[opponent]) * 2
+    let own_supply = supply(s, root)
+    let enemy_supply = supply(s, 3 - root)
+    let span = routes.red[s.bridge_mask][0]
+    for i in 0 .. tile_count(s) {
+        if s.owner[i] != 0 {
+            let sign: i64 = if s.owner[i] == root { 1 } else { -1 }
+            let connected = if sign == 1 { own_supply[i] } else { enemy_supply[i] }
+            let enemy_capital = capital(s, 3 - s.owner[i])
+            let distance = if s.owner[i] == 1 { routes.red[s.bridge_mask][i] } else { routes.blue[s.bridge_mask][i] }
+            parts[0] += sign * (24 + s.troops[i] * 12 + s.fort[i] * 4 + s.cavalry[i] * 8 + s.siege[i] * 12)
+            if terrain(s, i) == 10 && army_at(s, i).infantry > 0 { parts[0] += sign * 4 }
+            if connected {
+                parts[2] += sign * (10 + s.settlement[i] * 18)
+                if terrain(s, i) == 1 { parts[3] += sign * 26 }
+                // Modest infrastructure value complements actual food balance;
+                // disconnected specialties provide no operational benefit.
+                if s.specialty[i] == 1 { parts[3] += sign * 8 }
+                if s.specialty[i] == 2 { parts[3] += sign * 18 }
+            } else { parts[2] -= sign * (16 + s.troops[i] * 2) }
+            var nearby_siege_target = false
+            for direction in 0 .. 6 {
+                let target = neighbor(s, i, direction)
+                if target < tile_count(s) && passable(s, target) && s.owner[target] != s.owner[i]
+                    && (s.fort[target] > 0 || s.settlement[target] > 0 || terrain(s, target) == 4) {
+                    nearby_siege_target = true
+                }
+            }
+            // Reward a useful siege train at a real defended frontier, but cap the
+            // purpose bonus so the opponent does not blindly buy siege-only armies.
+            if nearby_siege_target { parts[5] += sign * imin(s.siege[i], 3) * 20 }
+            if connected && nearby_siege_target && s.specialty[i] == 2 { parts[3] += sign * 6 }
+            if terrain(s, i) == 7 || terrain(s, i) == 9 { parts[4] += sign * 18 }
+            if s.troops[i] > 1 { parts[4] += sign * ((span - distance) * s.troops[i]) }
+            if adjacent(s, i, enemy_capital) {
+                parts[5] += sign * s.troops[i] * 5
+                if s.troops[i] > 1 {
+                    let attackers = detachment(army_at(s, i), s.troops[i] - 1)
+                    if attack_power(s, enemy_capital, attackers) > defense(s, enemy_capital) {
+                        parts[5] += sign * 300
+                    }
+                }
+            }
+        }
+    }
+    let own_budget = economy_with_supply(s, root, own_supply)
+    let enemy_budget = economy_with_supply(s, 3 - root, enemy_supply)
+    parts[3] += (own_budget.food_production - own_budget.food_upkeep) * 5 -
+        (enemy_budget.food_production - enemy_budget.food_upkeep) * 5
+    parts[3] -= own_budget.shortage * 25
+    parts[3] += enemy_budget.shortage * 25
+    if focus.kind == 1 {
+        parts[6] = 2 * defense(s, focus.target) - 50 * direct_capital_threats(s, root)
+    } else if focus.kind == 2 {
+        if s.owner[focus.target] != root { parts[6] = -20 }
+        else if own_supply[focus.target] { parts[6] = 40 }
+    } else if focus.kind == 3 {
+        parts[6] = 3 * (own_budget.food_production - own_budget.food_upkeep) - 10 * own_budget.shortage
+    }
+    Evaluation { parts }
+}
+fn ranked(_ s: State, _ root: i64) -> Actions uses (Navigation) {
+    ranked_focused(s, root, select_focus(s, root))
+}
+fn ranked_focused(_ s: State, _ root: i64, _ focus: Focus) -> Actions uses (Navigation) {
+    var list = legal(s)
+    var scores = [0; 1024]
+    for i in 0 .. list.len { scores[i] = evaluation_total(breakdown_cached(apply(s, list.items[i]), root, focus)) }
+    for i in 1 .. list.len {
+        let chosen = list.items[i]
+        let value = scores[i]
+        var j = i
+        while j > 0 {
+            let previous = scores[j - 1]
+            let better = if s.side == root { value > previous } else { value < previous }
+            if !better { break }
+            list.items[j] = list.items[j - 1]
+            scores[j] = scores[j - 1]
+            j -= 1
+        }
+        list.items[j] = chosen
+        scores[j] = value
+    }
+    list
+}
+fn search(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i64) -> i64 uses (stats: mut Search) {
+    let routes = navigation(s)
+    with (Navigation = routes) { search_cached(s, depth, root, low, high) }
+}
+fn search_cached(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i64) -> i64 uses (stats: mut Search, Navigation) {
+    search_focused_cached(s, depth, root, low, high, select_focus(s, root))
+}
+fn search_focused_cached(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i64, _ focus: Focus) -> i64 uses (stats: mut Search, Navigation) {
+    // Depth counts actions, not orders. A two-order move advances the side in
+    // apply(); the actual resulting side controls maximizing/minimizing here.
+    stats.nodes += 1
+    if depth == 0 || s.result != 0 || s.decision_pending { return evaluation_total(breakdown_cached(s, root, focus)) }
+    let list = ranked_focused(s, root, focus)
+    let bound = if list.len < 6 { list.len } else { 6 }
+    var alpha = low
+    var beta = high
+    var best: i64 = if s.side == root { -200000 } else { 200000 }
+    for i in 0 .. bound {
+        let value = search_focused_cached(apply(s, list.items[i]), depth - 1, root, alpha, beta, focus)
+        if s.side == root { best = imax(best, value)
+            alpha = imax(alpha, best) }
+        else { best = imin(best, value)
+            beta = imin(beta, best) }
+        if alpha >= beta { break }
+    }
+    best
+}
+fn choose(_ s: State, _ difficulty: i64) -> Action uses (stats: mut Search) {
+    decide(s, difficulty).action
+}
+fn decide(_ s: State, _ difficulty: i64) -> Decision uses (stats: mut Search) {
+    let routes = navigation(s)
+    with (Navigation = routes) { decide_cached(s, difficulty) }
+}
+fn choose_cached(_ s: State, _ difficulty: i64) -> Action uses (stats: mut Search, Navigation) {
+    decide_cached(s, difficulty).action
+}
+fn positive_highlight(_ deltas: [i64; 8]) -> i64 {
+    var best: i64 = 0
+    var label: i64 = 0
+    for i in 0 .. 8 {
+        if deltas[i] > best { best = deltas[i]
+            label = (i + 1).downcast_unchecked() }
+    }
+    label
+}
+fn decide_cached(_ s: State, _ difficulty: i64) -> Decision uses (stats: mut Search, Navigation) {
+    assert(s.result == 0 && !s.decision_pending)
+    let before_nodes = stats.nodes
+    let focus = select_focus(s, s.side)
+    let list = ranked_focused(s, s.side, focus)
+    var best = list.items[0]
+    var score = evaluation_total(breakdown_cached(apply(s, best), s.side, focus))
+    if difficulty == 0 { stats.nodes += list.len.downcast_unchecked() }
+    else {
+        let bound = if list.len < 10 { list.len } else { 10 }
+        score = -200000
+        for i in 0 .. bound {
+            let value = search_focused_cached(apply(s, list.items[i]), 3, s.side, -200000, 200000, focus)
+            if value > score { score = value
+                best = list.items[i] }
+        }
+    }
+    let before = breakdown_cached(s, s.side, focus)
+    let after = breakdown_cached(apply(s, best), s.side, focus)
+    var deltas = [0; 8]
+    for i in 0 .. 8 { deltas[i] = after.parts[i] - before.parts[i] }
+    Decision {
+        action: best, side: s.side, focus, depth: if difficulty == 0 { 1 } else { 4 },
+        nodes: stats.nodes - before_nodes, search_score: score,
+        before_score: evaluation_total(before), after_score: evaluation_total(after),
+        deltas, highlight: positive_highlight(deltas), order_cost: order_cost(s, best),
+    }
+}
+fn empty_decision() -> Decision {
+    Decision { action: pass(), side: 0, focus: Focus { kind: 4, target: MAX_TILES },
+        depth: 0, nodes: 0, search_score: 0, before_score: 0, after_score: 0,
+        deltas: [0; 8], highlight: 0, order_cost: 0 }
+}
+fn empty_decision_history() -> DecisionHistory {
+    DecisionHistory { items: [empty_decision(); 2], trace_indices: [0; 2], len: 0 }
+}
+fn remember_decision(_ decision: Decision, _ trace_index: usize) uses (history: mut DecisionHistory) {
+    if history.len == 2 {
+        history.items[0] = history.items[1]
+        history.trace_indices[0] = history.trace_indices[1]
+        history.len = 1
+    }
+    history.items[history.len] = decision
+    history.trace_indices[history.len] = trace_index
+    history.len += 1
+}
