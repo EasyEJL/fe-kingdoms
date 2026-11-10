@@ -287,6 +287,70 @@ class AdapterTests(unittest.TestCase):
             for action in initial['legal']:
                 if action[0]==1:self.assertTrue(initial['tiles'][action[2]]['passable'])
 
+    def test_crossing_designations_construction_and_invalid_orders(self):
+        def at(actions,scenario=0):
+            return game(dict(version=CURRENT_VERSION,scenario=scenario,mode=1,difficulty=0,actions=actions))
+        for scenario in (0,1,2):
+            initial=at([],scenario)
+            width,height=initial['map']['width'],initial['map']['height']
+            sites=[tile['index'] for tile in initial['tiles'] if tile['crossingSite']]
+            self.assertEqual(sites,[width//2,(height-1)*width+width//2])
+            for index in sites:
+                tile=initial['tiles'][index]
+                self.assertEqual((tile['terrain'],tile['passable'],tile['constructedBridge']),(8,0,0))
+        for trace,bank,target,side in (([],1,2,1),([[0,0,0,0]],13,12,2)):
+            before=at(trace)
+            action=[12,bank,target,1]
+            preview=before['previews'][before['legal'].index(action)]
+            after=at(trace+[action])
+            tile=after['tiles'][target]
+            self.assertEqual((preview['outcome'],preview['cost'],preview['foodCost'],preview['orderCost']),(8,6,2,1))
+            self.assertEqual((tile['crossingSite'],tile['constructedBridge'],tile['terrain'],tile['passable']),(1,1,9,1))
+            self.assertEqual((tile['owner'],tile['troops'],tile['defense'],tile['supplied']),(0,0,0,0))
+            self.assertEqual((after['state']['side'],after['state']['orders']),(side,1))
+            self.assertEqual(preview['cost'],before['state'][f'gold{side}']-after['state'][f'gold{side}'])
+            self.assertEqual(preview['foodCost'],before['economy'][side-1]['food']-after['economy'][side-1]['food'])
+            for key,field in (('targetOwner','owner'),('targetTroops','troops'),('targetTerrain','terrain'),('targetPassable','passable')):
+                self.assertEqual(preview[key],tile[field])
+            self.assertEqual(before['supply'],after['supply'],'A neutral bridge does not grant supply ownership.')
+            with self.assertRaises(ValueError):at(trace+[action,action])
+        for illegal in ([12,1,6,1],[12,1,12,1],[12,0,2,1],[12,1,2,2],[12,13,12,1]):
+            with self.assertRaises(ValueError):at([illegal])
+        with self.assertRaises(ValueError):at([[2,0,0,2],[12,1,2,1]])
+        # An owned, supplied fixed bridge is not a land bank.
+        bridge_bank=[[1,0,1,5],[1,1,6,7],[0,0,0,0],[1,6,7,4]]
+        bank=at(bridge_bank)['tiles'][7]
+        self.assertEqual((bank['owner'],bank['supplied'],bank['terrain']),(1,1,9))
+        with self.assertRaises(ValueError):at(bridge_bank+[[12,7,2,1]])
+
+    def test_constructed_bridge_is_shared_and_empty_until_occupied(self):
+        build=[12,1,2,1]
+        # Blue may occupy its own work immediately, or Red may reach it first.
+        for trace,action,side in (
+            ([build],[1,1,2,2],1),
+            ([build,[0,0,0,0],[1,14,13,5],[1,13,8,7],[0,0,0,0],[1,8,3,4]],[1,3,2,2],2),
+        ):
+            before=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=trace))
+            self.assertEqual((before['tiles'][2]['owner'],before['tiles'][2]['troops']),(0,0))
+            preview=before['previews'][before['legal'].index(action)]
+            after=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=trace+[action]))
+            self.assertEqual((preview['outcome'],preview['defense'],preview['targetOwner'],preview['targetTroops']),(2,0,side,2))
+            self.assertEqual((after['tiles'][2]['owner'],after['tiles'][2]['troops'],after['tiles'][2]['constructedBridge']),(side,2,1))
+            self.assertEqual(after['tiles'][2]['supplied'],1)
+            for player,color in enumerate(('blue','red')):
+                self.assertEqual(preview[color+'ConnectedAfter'],after['supply'][player]['connectedOwned'])
+                self.assertEqual(preview[color+'CutOffAfter'],after['supply'][player]['cutOffOwned'])
+            self.assertEqual(game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=trace+[action])),after)
+            if side==2:
+                recapture_trace=trace+[action,[1,0,1,5]]
+                prepared=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=recapture_trace))
+                recapture=[1,1,2,7]
+                forecast=prepared['previews'][prepared['legal'].index(recapture)]
+                restored=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=recapture_trace+[recapture]))
+                self.assertEqual((forecast['outcome'],forecast['defense'],forecast['targetOwner']),(2,3,1))
+                self.assertEqual((restored['tiles'][2]['owner'],restored['tiles'][2]['constructedBridge']),(1,1))
+                self.assertEqual(forecast['targetTroops'],restored['tiles'][2]['troops'])
+
     def test_next_turn_food_projection(self):
         for scenario in (0,1,2):
             before=game(dict(version=CURRENT_VERSION,scenario=scenario,mode=1,difficulty=0,actions=[]))

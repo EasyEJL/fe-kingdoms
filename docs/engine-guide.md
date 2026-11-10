@@ -50,7 +50,7 @@ Read `map_width`, `map_height`, `hex_distance`, `neighbor`, `terrain` and `passa
 
 Coordinates are axial: q is the column and r the row. `neighbor` enumerates six directions and returns the sentinel `MAX_TILES` outside the map. Callers check it before indexing. Mountains and rivers are impassable. Fixed bridges cross the central river, and the wider maps have a central widening that creates real land detours.
 
-`hex_distance` measures unobstructed distance. `route_distances` uses exact breadth-first traversal of passable hexes; `travel_distance` is its point-to-point wrapper. `navigation` builds distance arrays from both capitals. `choose` supplies this Navigation capability once, and the cached evaluation/ranking/search functions reuse it for every trial state. Those distances ignore ownership and describe fixed terrain routes. Supply deliberately uses a separate ownership-sensitive traversal. A future buildable/destroyable bridge rule would invalidate the fixed-topology assumption and require another explicit design change.
+`hex_distance` measures unobstructed distance. `route_distances` uses exact breadth-first traversal of passable hexes; `travel_distance` is its point-to-point wrapper. `navigation` builds distance arrays from both capitals. `choose` supplies this Navigation capability once, and the cached evaluation/ranking/search functions reuse it for every trial state. Those distances ignore ownership and describe fixed terrain routes. Supply deliberately uses a separate ownership-sensitive traversal. V7 construction replaces this fixed-topology assumption with four cached route variants; each trial selects the variant for its own bridge mask. See the v7 section below.
 
 The browser receives coordinates and terrain from Fe. Its layout code does not decide adjacency.
 
@@ -190,3 +190,9 @@ Hard still searches four action plies, not four order points. Expensive moves ch
 ## V7 stage 2: one town choice, shared prices
 
 A specialty is tile state, not ownership state. Capture changes ownership without erasing the choice. Granary production reads the same connected-supply map as the rest of economy. Arsenal pricing is shared by legal, apply and forecasts, so paid training and recruitment agree. Look for kind11 and the specialty price helper; the adapter only exposes Fe's chosen state and costs. A town cannot switch its specialty later.
+
+## V7 stage 3: mutation without stale routes
+
+Construction records two bits in State, so replay reconstructs it from kind12 just like other actions. A designated site remains identifiable after building. The new bridge is neutral and empty; ownership changes only when an army occupies it. Supply and military movement remain different questions.
+
+Navigation prepares all four topology variants once per decision. Read the route-selection helper inside evaluation: it must index using the candidate State, not just the original root. Tests compare every variant with an independent graph oracle and evaluate a built position using a cache prepared before construction. This is a bounded domain-specific cache, not a general mutable-map framework.

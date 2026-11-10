@@ -38,3 +38,7 @@ Keep this project separate from Dragonstales, the preserved transition prototype
 Forest and actual-detachment movement costs are the first implementation stage. Town specialties (granary/arsenal), bounded permanent shared crossing construction and truthful Fe opponent evaluation/strategy feedback are authorized next stages, not completed features yet. Use existing gold/food and small factual profiles, not a generic framework. Destructible bridges, forest harvesting, roads and an Expert tier remain future candidates. Expert might use measured iterative deepening, tactical extensions and caching after mechanics settle; no guaranteed wins are implied.
 
 V7 stage2 now implements Granary/Arsenal as the permanent bounded town choice described in ADR0012; bridge construction and opponent feedback remain the next stages.
+
+Later map direction from playtesting: consider larger maps with room for economic development before major battles. This is a candidate, not an implemented or scheduled map. Evaluate two-order pacing, travel times, resource/storage caps, action/trace bounds, search cost and browser readability together. The current largest map has45 hexes within a64-tile engine capacity; increasing those bounds requires explicit tests rather than changing dimensions alone.
+
+V7 stage3 now implements permanent shared crossings and four-topology route caching (ADR0013). Destruction/harvesting remain candidates; opponent feedback is the next implementation stage.

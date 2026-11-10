@@ -17,6 +17,7 @@ struct State {
     fort: [i64; 64],
     settlement: [i64; 64],
     specialty: [i64; 64],
+    bridge_mask: usize,
     gold: [i64; 3],
     food: [i64; 3],
     scenario: usize,
@@ -38,8 +39,9 @@ impl Copy for Action {}
 struct Actions { items: [Action; 1024], len: usize }
 impl Copy for Actions {}
 struct Search { nodes: i64 }
-// Static map routes are shared by the entire decision search, not State.
-struct Navigation { blue: [i64; 64], red: [i64; 64] }
+// Two permanent construction sites give four bounded topology variants.
+// Every trial position selects its own mask, not the decision root's mask.
+struct Navigation { blue: [[i64; 64]; 4], red: [[i64; 64]; 4] }
 struct TerrainProfile { walkable: bool, defense_bonus: i64, open_ground: bool }
 struct UnitProfile {
     recruit_gold: i64, recruit_food: i64, recruit_count: i64,
@@ -93,7 +95,7 @@ fn capital(_ s: State, _ side: i64) -> usize {
 }
 
 // AXIAL GEOMETRY AND MAPS
-// q = column, r = row. Rivers can only be crossed at permanent bridges.
+// q = column, r = row. Fixed bridges always remain; two bank sites can be built.
 fn hex_distance(_ s: State, _ a: usize, _ b: usize) -> i64 {
     let width = map_width(s)
     let aq: i64 = (a % width).downcast_unchecked()
@@ -126,6 +128,15 @@ fn adjacent(_ s: State, _ a: usize, _ b: usize) -> bool {
 fn is_pass_row(_ s: State, _ row: usize) -> bool {
     if s.scenario == 0 { row == 1 } else { row == 1 || row == 3 }
 }
+fn crossing_bit(_ s: State, _ i: usize) -> usize {
+    if i == map_width(s) / 2 { 1 }
+    else if i == (map_height(s) - 1) * map_width(s) + map_width(s) / 2 { 2 }
+    else { 0 }
+}
+fn constructed_bridge(_ s: State, _ i: usize) -> bool {
+    let bit = crossing_bit(s, i)
+    bit > 0 && (s.bridge_mask / bit) % 2 == 1
+}
 fn terrain(_ s: State, _ i: usize) -> i64 {
     let width = map_width(s)
     let height = map_height(s)
@@ -135,7 +146,7 @@ fn terrain(_ s: State, _ i: usize) -> i64 {
     if i == 0 || i == last { return 4 }
     if i == width - 1 || i == (height - 1) * width { return 5 }
     if q == width / 2 {
-        if is_pass_row(s, r) { return 9 }
+        if is_pass_row(s, r) || constructed_bridge(s, i) { return 9 }
         return 8
     }
     if height > 3 && r == height / 2 && (q == width / 2 - 1 || q == width / 2 + 1) { return 8 }
@@ -152,7 +163,7 @@ fn terrain(_ s: State, _ i: usize) -> i64 {
 fn passable(_ s: State, _ i: usize) -> bool {
     i < tile_count(s) && terrain_profile(terrain(s, i)).walkable
 }
-// Exact fixed-topology BFS. Ownership does not obstruct movement distance;
+// Exact current-topology BFS. Ownership does not obstruct movement distance;
 // ownership-sensitive connectivity is calculated separately by supply().
 fn route_distances(_ s: State, _ start: usize) -> [i64; 64] {
     var distance: [i64; 64] = [1000; 64]
@@ -178,7 +189,15 @@ fn route_distances(_ s: State, _ start: usize) -> [i64; 64] {
 }
 fn travel_distance(_ s: State, _ a: usize, _ b: usize) -> i64 { route_distances(s, a)[b] }
 fn navigation(_ s: State) -> Navigation {
-    Navigation { blue: route_distances(s, capital(s, 1)), red: route_distances(s, capital(s, 2)) }
+    var blue: [[i64; 64]; 4] = [[1000; 64]; 4]
+    var red: [[i64; 64]; 4] = [[1000; 64]; 4]
+    for mask in 0 .. 4 {
+        var variant = s
+        variant.bridge_mask = mask
+        blue[mask] = route_distances(variant, capital(variant, 1))
+        red[mask] = route_distances(variant, capital(variant, 2))
+    }
+    Navigation { blue, red }
 }
 
 // ARMY COMPOSITION AND DETERMINISTIC DETACHMENTS
@@ -281,7 +300,7 @@ fn initial(_ scenario: usize) -> State {
     assert(scenario <= 2)
     var s = State {
         owner: [0; 64], troops: [0; 64], cavalry: [0; 64], siege: [0; 64], fort: [0; 64], settlement: [0; 64], specialty: [0; 64],
-        gold: [0, 8, 8], food: [0, 12, 12], scenario,
+        bridge_mask: 0, gold: [0, 8, 8], food: [0, 12, 12], scenario,
         side: 1, orders: 2, turn: 1, result: 0, passes: 0,
         completed_rounds: 0, round_limit: base_round_limit(scenario), decision_pending: false,
     }
@@ -458,6 +477,16 @@ fn legal(_ s: State) -> Actions {
                         add(Action { kind: 11, from: i, to: i, amount: 1 })
                         add(Action { kind: 11, from: i, to: i, amount: 2 })
                     }
+                    // A supplied land bank builds shared infrastructure, not
+                    // territory. Construction does not claim or garrison it.
+                    if terrain(s, i) != 9 && s.gold[player] >= 6 && s.food[player] >= 2 {
+                        for direction in 0 .. 6 {
+                            let target = neighbor(s, i, direction)
+                            if target < tile_count(s) && crossing_bit(s, target) > 0 && !constructed_bridge(s, target) {
+                                add(Action { kind: 12, from: i, to: target, amount: 1 })
+                            }
+                        }
+                    }
                 }
                 if s.troops[i] > 1 {
                     for direction in 0 .. 6 {
@@ -490,6 +519,7 @@ fn is_legal(_ s: State, _ action: Action) -> bool {
     false
 }
 fn defense(_ s: State, _ tile: usize) -> i64 {
+    if s.troops[tile] == 0 { return 0 }
     s.troops[tile] + s.fort[tile] + terrain_profile(terrain(s, tile)).defense_bonus
         + if terrain(s, tile) == 10 && army_at(s, tile).infantry > 0 { 1 } else { 0 }
 }
@@ -543,6 +573,10 @@ fn apply(_ before: State, _ action: Action) -> State {
             s.gold[player] -= 6
             s.food[player] -= 2
             s.specialty[action.from] = action.amount
+        } else if action.kind == 12 {
+            s.gold[player] -= 6
+            s.food[player] -= 2
+            s.bridge_mask += crossing_bit(s, action.to)
         } else {
             let moving = detachment(army_at(s, action.from), action.amount)
             let garrison = subtract_armies(army_at(s, action.from), moving)
@@ -603,13 +637,13 @@ fn evaluate_cached(_ s: State, _ root: i64) -> i64 uses (routes: Navigation) {
         + (s.food[player] - s.food[opponent]) * 2
     let own_supply = supply(s, root)
     let enemy_supply = supply(s, 3 - root)
-    let span = routes.red[0]
+    let span = routes.red[s.bridge_mask][0]
     for i in 0 .. tile_count(s) {
         if s.owner[i] != 0 {
             let sign: i64 = if s.owner[i] == root { 1 } else { -1 }
             let connected = if sign == 1 { own_supply[i] } else { enemy_supply[i] }
             let enemy_capital = capital(s, 3 - s.owner[i])
-            let distance = if s.owner[i] == 1 { routes.red[i] } else { routes.blue[i] }
+            let distance = if s.owner[i] == 1 { routes.red[s.bridge_mask][i] } else { routes.blue[s.bridge_mask][i] }
             score += sign * (24 + s.troops[i] * 12 + s.fort[i] * 4 + s.cavalry[i] * 8 + s.siege[i] * 12)
             if terrain(s, i) == 10 && army_at(s, i).infantry > 0 { score += sign * 4 }
             if connected {

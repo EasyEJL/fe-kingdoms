@@ -102,3 +102,13 @@ The full aggregate passed with42 Fe tests and18 adapter tests, plus the existing
 A constructed Granary policy test originally competed with a worthwhile attack that reduced threat and upkeep. Both policies rationally preferred that attack. The fixture was revised to test a one-order sustainable-food investment rather than increasing policy weights to force the desired answer. Granary's2-food purchase offsets its first extra harvest; the test proves equal first-harvest losses and two fewer losses at the next harvest. This is sustained support, not instant starvation relief.
 
 Independent source/test review found no blocking defect; an omitted protocol outcome label was corrected. No real-browser or human playtest occurred, and existing previews remain unchanged. Difficulty/balance conclusions still require broader playtesting.
+
+## V7 stage 3: shared crossings, 2026-11-10
+
+Full scripts/verify.ps1 passed with48 Fe tests,20 adapter tests and all prior compatibility, replay, mocked UI, parser and campaign checks. Current58-action/45-request HTTP victory still matches the actual Red policy unchanged. Six24-action self-play samples remain unfinished; none constructed a bridge in that short window, so they do not establish construction strength.
+
+Native tests cover both sites/all maps, payment, neutral empty construction, no free troops/supply, first occupation by either kingdom, capture/reconnection and exact two-bridge replay. Four navigation variants per scenario match an independent route oracle and mirrored masks. A direct perturbation test proves evaluation reads the active mask's distances and ignores inactive variants, beyond simple cache-equality checks.
+
+Both policies exploit a safely built crossing to reconnect a productive holding. Hard chose a better free route through the existing bridge in one investment fixture. With a strong enemy holding that bridge, Hard still declined construction because the enemy could contest the adjacent new crossing; the chosen line scored better at its actual search horizon. Tests retain those alternatives rather than forcing construction with inflated heuristics. This is bounded tactical evidence, not proof of optimal bridge planning.
+
+Review found no blocking source defect and prompted the direct cache guard. A new pre-move message warns when a successful two-order assault leaves no order to fortify. Existing running previews/checkpoints remain untouched. No new browser or human playtest occurred.

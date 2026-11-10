@@ -32,6 +32,7 @@ On the small map, move five troops from A1 to B1, then seven from B1 to the fore
 ## Campaign rules
 
 - Three deterministic axial hex maps: 5x3, 7x5 and 9x5. Movement follows up to six shared edges. Rivers and mountains are impassable; fixed bridges provide crossings and one extra defense.
+- Build an optional shared bridge at a marked river site from an adjacent supplied owned land bank for six gold, two food and one order. It is permanent and initially neutral/empty: either side can occupy it. Construction alone does not add owned territory or supply.
 - Move half a stack or all but one unit. Friendly stacks combine without converting unit types, up to twelve. One garrison remains behind; Fe previews the exact infantry/cavalry/siege detachment.
 - Both sides start with eight gold and twelve food, capped at forty each. Recruit two troops for three gold and two food at a supplied capital or settlement.
 - Build a village for six gold; upgrade to a town for eight. Both use one order. Supplied villages/towns produce one/two gold each turn. Fortifying costs two gold, with a maximum of two levels.

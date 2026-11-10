@@ -28,6 +28,7 @@ fn shortest_route(_ s: State, _ start: usize, _ goal: usize) -> i64 {
 }
 fn check_bounds(_ s: State) {
     assert(s.orders >= 0 && s.orders <= 2)
+    assert(s.bridge_mask < 4)
     for side in 1 .. 3 {
         assert(s.gold[side] >= 0 && s.gold[side] <= 40)
         assert(s.food[side] >= 0 && s.food[side] <= 40)
@@ -41,7 +42,10 @@ fn check_bounds(_ s: State) {
         let army = army_at(s, i)
         assert(army.infantry >= 0 && army.cavalry >= 0 && army.siege >= 0)
         assert(army_size(army) == s.troops[i])
-        if passable(s, i) { assert(s.troops[i] >= 1 && s.troops[i] <= 12) }
+        if passable(s, i) {
+            if constructed_bridge(s, i) && s.owner[i] == 0 { assert(s.troops[i] == 0 && s.fort[i] == 0 && s.settlement[i] == 0) }
+            else { assert(s.troops[i] >= 1 && s.troops[i] <= 12) }
+        }
         else { assert(s.owner[i] == 0 && s.troops[i] == 0 && s.settlement[i] == 0) }
     }
 }
@@ -578,7 +582,7 @@ fn boundary_search_is_a_leaf_not_an_ai_campaign_vote() {
 fn same_campaign(_ a: State, _ b: State) -> bool {
     if a.side != b.side || a.orders != b.orders || a.turn != b.turn || a.result != b.result
         || a.passes != b.passes || a.completed_rounds != b.completed_rounds
-        || a.round_limit != b.round_limit || a.decision_pending != b.decision_pending { return false }
+        || a.round_limit != b.round_limit || a.decision_pending != b.decision_pending || a.bridge_mask != b.bridge_mask { return false }
     for side in 0 .. 3 { if a.gold[side] != b.gold[side] || a.food[side] != b.food[side] { return false } }
     for i in 0 .. tile_count(a) {
         if a.owner[i] != b.owner[i] || a.troops[i] != b.troops[i]
@@ -628,11 +632,11 @@ fn fixed_rivers_bridges_and_cached_capital_routes_match_oracle() {
                 assert(attack_power(s, i, cavalry) == 3)
             }
             if passable(s, i) {
-                assert(routes.blue[i] == shortest_route(s, capital(s, 1), i))
-                assert(routes.red[i] == shortest_route(s, capital(s, 2), i))
-                assert(routes.blue[i] < 1000 && routes.red[i] < 1000)
+                assert(routes.blue[s.bridge_mask][i] == shortest_route(s, capital(s, 1), i))
+                assert(routes.red[s.bridge_mask][i] == shortest_route(s, capital(s, 2), i))
+                assert(routes.blue[s.bridge_mask][i] < 1000 && routes.red[s.bridge_mask][i] < 1000)
             } else {
-                assert(routes.blue[i] == 1000 && routes.red[i] == 1000)
+                assert(routes.blue[s.bridge_mask][i] == 1000 && routes.red[s.bridge_mask][i] == 1000)
                 assert(s.owner[i] == 0 && s.settlement[i] == 0)
             }
         }
@@ -1063,4 +1067,237 @@ fn specialty_value_depends_on_supply_and_legal_trace_replays() {
         check_bounds(s)
     }
     assert(s.specialty[5] == 2 && s.result == 0)
+}
+
+// V7 BOUNDED SHARED CROSSINGS
+#[test]
+fn designated_crossings_are_symmetric_paid_empty_and_shared() {
+    for scenario in 0 .. 3 {
+        for side in 1 .. 3 {
+            var s = initial(scenario)
+            let last = tile_count(s) - 1
+            let top = map_width(s) / 2
+            let site = if side == 1 { top } else { last - top }
+            let bank = if side == 1 { top - 1 } else { last - top + 1 }
+            s.side = side.downcast_unchecked()
+            for q in 0 .. top {
+                let tile = if side == 1 { q } else { last - q }
+                s.owner[tile] = s.side
+            }
+            assert(crossing_bit(s, top) == 1 && crossing_bit(s, last - top) == 2)
+            assert(terrain(s, site) == 8 && !passable(s, site) && !constructed_bridge(s, site))
+            let action = Action { kind: 12, from: bank, to: site, amount: 1 }
+            assert(is_legal(s, action) && order_cost(s, action) == 1)
+            let before_army = total_army(s, s.side)
+            let before_supply = supply_count(s, s.side)
+            s = apply(s, action)
+            assert(s.bridge_mask == if side == 1 { 1 } else { 2 })
+            assert(constructed_bridge(s, site) && passable(s, site) && terrain(s, site) == 9)
+            assert(s.owner[site] == 0 && s.troops[site] == 0 && defense(s, site) == 0)
+            assert(s.gold[side] == 2 && s.food[side] == 10 && s.orders == 1)
+            assert(total_army(s, s.side) == before_army)
+            assert(supply_count(s, s.side).connected == before_supply.connected)
+            assert(supply_count(s, s.side).cut_off == before_supply.cut_off)
+            assert(!supply(s, s.side)[site] && !is_legal(s, action))
+            s.troops[bank] = 4
+            let occupy = Action { kind: 1, from: bank, to: site, amount: 3 }
+            assert(is_legal(s, occupy))
+            let occupied = apply(s, occupy)
+            assert(occupied.owner[site] == side.downcast_unchecked() && occupied.troops[site] == 3)
+            assert(occupied.troops[bank] == 1 && occupied.bridge_mask == s.bridge_mask)
+            assert(supply(occupied, side.downcast_unchecked())[site])
+            check_bounds(occupied)
+        }
+    }
+    // The opposing kingdom may occupy a bridge the builder has left neutral.
+    var s = apply(initial(0), Action { kind: 12, from: 1, to: 2, amount: 1 })
+    s.side = 2
+    s.orders = 2
+    s.owner[3] = 2
+    s.troops[3] = 5
+    let enemy_occupation = Action { kind: 1, from: 3, to: 2, amount: 4 }
+    assert(is_legal(s, enemy_occupation))
+    s = apply(s, enemy_occupation)
+    assert(s.owner[2] == 2 && s.troops[2] == 4 && s.troops[3] == 1)
+    assert(s.bridge_mask == 1 && terrain(s, 2) == 9)
+    check_bounds(s)
+}
+#[test]
+fn crossing_construction_requires_resources_supply_land_and_designation() {
+    var s = initial(0)
+    let action = Action { kind: 12, from: 1, to: 2, amount: 1 }
+    assert(is_legal(s, action))
+    s.gold[1] = 5
+    assert(!is_legal(s, action))
+    s.gold[1] = 6
+    s.food[1] = 1
+    assert(!is_legal(s, action))
+    s.food[1] = 2
+    s.owner[0] = 2
+    assert(!is_legal(s, action))
+    s.owner[0] = 1
+    assert(!is_legal(s, Action { kind: 12, from: 0, to: 2, amount: 1 }))
+    assert(!is_legal(s, Action { kind: 12, from: 1, to: 2, amount: 2 }))
+    assert(!is_legal(s, Action { kind: 12, from: 1, to: 6, amount: 1 }))
+    s.owner[6] = 1
+    s.owner[7] = 1
+    assert(supply(s, 1)[7] && adjacent(s, 7, 2))
+    assert(!is_legal(s, Action { kind: 12, from: 7, to: 2, amount: 1 }))
+    s = initial(1)
+    s.owner[1] = 1
+    s.owner[8] = 1
+    s.owner[9] = 1
+    assert(terrain(s, 16) == 8 && crossing_bit(s, 16) == 0)
+    assert(!is_legal(s, Action { kind: 12, from: 9, to: 16, amount: 1 }))
+}
+#[test]
+fn all_four_navigation_variants_match_current_topology_oracle() {
+    for scenario in 0 .. 3 {
+        let base = initial(scenario)
+        // This cache is constructed once at mask zero and reused for all
+        // hypothetical masks, exactly as it is inside one policy search.
+        let routes = navigation(base)
+        for mask in 0 .. 4 {
+            var s = base
+            s.bridge_mask = mask
+            var bridges: usize = 0
+            var sites: usize = 0
+            for i in 0 .. tile_count(s) {
+                if crossing_bit(s, i) > 0 { sites += 1 }
+                if terrain(s, i) == 9 { bridges += 1 }
+                if passable(s, i) {
+                    assert(routes.blue[mask][i] == shortest_route(s, capital(s, 1), i))
+                    assert(routes.red[mask][i] == shortest_route(s, capital(s, 2), i))
+                    assert(routes.blue[mask][i] < 1000 && routes.red[mask][i] < 1000)
+                } else { assert(routes.blue[mask][i] == 1000 && routes.red[mask][i] == 1000) }
+            }
+            assert(sites == 2)
+            assert(bridges == (if scenario == 0 { 1 } else { 2 }) + mask % 2 + mask / 2)
+            for root in 1 .. 3 {
+                let side: i64 = root.downcast_unchecked()
+                let cached = with (Navigation = routes) { evaluate_cached(s, side) }
+                assert(cached == evaluate(s, side))
+            }
+            let mirrored_mask = (mask % 2) * 2 + mask / 2
+            var mirrored = base
+            mirrored.bridge_mask = mirrored_mask
+            for i in 0 .. tile_count(s) {
+                assert(terrain(s, i) == terrain(mirrored, tile_count(s) - 1 - i))
+            }
+            check_bounds(s)
+        }
+        var built = base
+        built.bridge_mask = 3
+        let top = map_width(base) / 2
+        assert(travel_distance(built, top - 1, top + 1) == 2)
+        assert(travel_distance(base, top - 1, top + 1) > 2)
+    }
+}
+fn crossing_reconnection_position() -> State {
+    var s = initial(0)
+    s.troops[0] = 1
+    s.fort[0] = 2
+    s.fort[1] = 2
+    s.fort[5] = 2
+    s.owner[3] = 1
+    s.troops[3] = 12
+    s.fort[3] = 2
+    s.settlement[3] = 2
+    s.specialty[3] = 1
+    s.gold[1] = 6
+    s.food[1] = 2
+    s
+}
+#[test]
+fn hypothetical_construction_uses_new_routes_and_occupation_restores_supply() {
+    let s = crossing_reconnection_position()
+    let build = Action { kind: 12, from: 1, to: 2, amount: 1 }
+    assert(is_legal(s, build) && supply_count(s, 1).cut_off == 1)
+    let routes = navigation(s)
+    let built = apply(s, build)
+    assert(!supply(built, 1)[3] && !supply(built, 1)[2])
+    for root in 1 .. 3 {
+        let side: i64 = root.downcast_unchecked()
+        assert(with (Navigation = routes) { evaluate_cached(built, side) } == evaluate(built, side))
+    }
+    // Independent sensitivity guard: only the active mask may influence this
+    // asymmetric position. An always-mask-zero cache would fail both checks.
+    let ordinary_score = evaluate(built, 1)
+    var active_routes = navigation(s)
+    active_routes.red[built.bridge_mask][3] += 1
+    let active_score = with (Navigation = active_routes) { evaluate_cached(built, 1) }
+    assert(active_score == ordinary_score - built.troops[3])
+    var inactive_routes = navigation(s)
+    inactive_routes.red[0][3] += 1
+    assert(with (Navigation = inactive_routes) { evaluate_cached(built, 1) } == ordinary_score)
+    var cached_stats = Search { nodes: 0 }
+    var fresh_stats = Search { nodes: 0 }
+    let cached_search = with (Navigation = routes, Search = cached_stats) { search_cached(built, 2, 1, -200000, 200000) }
+    let fresh_search = with (Search = fresh_stats) { search(built, 2, 1, -200000, 200000) }
+    assert(cached_search == fresh_search && cached_stats.nodes == fresh_stats.nodes)
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let action = with (Search = stats) { choose(built, difficulty.downcast_unchecked()) }
+        assert(is_legal(built, action) && action.kind == 1 && action.to == 2)
+        let connected = apply(built, action)
+        assert(supply(connected, 1)[3] && supply_count(connected, 1).cut_off == 0)
+        assert(connected.troops[action.from] + connected.troops[2] == built.troops[action.from])
+        assert(connected.specialty[3] == 1)
+        check_bounds(connected)
+    }
+    // Construction itself is an investment, not immediate supply. Hard may
+    // instead reconnect through the existing bridge while capturing useful
+    // land. Test the strategic outcome, not compulsory new infrastructure.
+    var hard = Search { nodes: 0 }
+    let planned = with (Search = hard) { choose(s, 1) }
+    assert(is_legal(s, planned))
+    assert(hard.nodes > 0 && hard.nodes <= 2590)
+    var developed = apply(s, planned)
+    if developed.side == s.side {
+        let next = with (Search = hard) { choose(developed, 1) }
+        assert(is_legal(developed, next))
+        developed = apply(developed, next)
+    }
+    assert(supply(developed, 1)[3] && supply_count(developed, 1).cut_off == 0)
+    var easy = Search { nodes: 0 }
+    assert(is_legal(s, with (Search = easy) { choose(s, 0) }))
+}
+#[test]
+fn both_shared_crossings_replay_without_troop_or_resource_gifts() {
+    let trace = [Action { kind: 12, from: 1, to: 2, amount: 1 },
+        Action { kind: 1, from: 1, to: 2, amount: 2 },
+        Action { kind: 12, from: 13, to: 12, amount: 1 },
+        Action { kind: 1, from: 13, to: 12, amount: 2 }]
+    var s = initial(0)
+    var replay = initial(0)
+    let blue_army = total_army(s, 1)
+    let red_army = total_army(s, 2)
+    for i in 0 .. 4 {
+        assert(is_legal(s, trace[i]))
+        s = apply(s, trace[i])
+        replay = apply(replay, trace[i])
+        assert(same_campaign(s, replay))
+        assert(total_army(s, 1) == blue_army && total_army(s, 2) == red_army)
+        check_bounds(s)
+    }
+    assert(s.bridge_mask == 3 && s.owner[2] == 1 && s.owner[12] == 2)
+    assert(s.troops[2] == 2 && s.troops[12] == 2)
+    assert(s.gold[1] == 5 && s.gold[2] == 5)
+}
+#[test]
+fn hard_can_decline_a_crossing_exposed_to_a_strong_enemy() {
+    var s = crossing_reconnection_position()
+    s.owner[7] = 2
+    s.troops[7] = 12
+    s.fort[7] = 2
+    var stats = Search { nodes: 0 }
+    let action = with (Search = stats) { choose(s, 1) }
+    let build = Action { kind: 12, from: 1, to: 2, amount: 1 }
+    assert(is_legal(s, action) && is_legal(s, build) && !same_action(action, build))
+    // The fortified army can contest the new adjacent bridge. Evaluate both
+    // candidate lines at the policy's real horizon rather than force a build.
+    let chosen_value = with (Search = stats) { search(apply(s, action), 3, 1, -200000, 200000) }
+    let build_value = with (Search = stats) { search(apply(s, build), 3, 1, -200000, 200000) }
+    assert(chosen_value > build_value)
+    check_bounds(apply(s, action))
 }
