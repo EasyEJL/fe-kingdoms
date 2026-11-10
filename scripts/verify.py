@@ -2,7 +2,7 @@
 import hashlib,json,pathlib,subprocess,sys,time
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 E=ROOT/'evidence';E.mkdir(exist_ok=True)
-commands=[['python3','scripts/build.py'],['python3','scripts/test_fe.py'],['python3','scripts/test_tactics.py'],['python3','scripts/test_matches.py'],['python3','tests/test_http.py'],['python3','tests/test_decisions.py'],['python3','tests/test_campaign.py'],['python3','tests/test_playtest_replays.py'],['python3','tests/test_v7_replays.py'],['python3','scripts/test_http_match.py']]
+commands=[['python3','scripts/build.py'],['python3','scripts/test_fe.py'],['python3','scripts/test_tactics.py'],['python3','scripts/test_matches.py'],['python3','tests/test_http.py'],['python3','tests/test_decisions.py'],['python3','tests/test_campaign.py'],['python3','tests/test_playtest_replays.py'],['python3','tests/test_v7_replays.py'],['python3','tests/test_practice.py'],['python3','scripts/test_http_match.py']]
 results=[]
 summary={'status':'running','checks':results}
 (E/'verification.json').write_text(json.dumps(summary,indent=2))

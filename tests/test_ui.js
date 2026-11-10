@@ -423,5 +423,67 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
   vm.runInContext(html.split('<script>')[1].split('</script>')[0],boot);assert.equal(bootFetches,0);assert.equal(bootWrites,0);assert.equal(bootGet('snapshot-save').disabled,true);
   if(stored===null)assert.match(bootGet('storage-warning').textContent,/startup denied.*Automatic startup is paused/);
  }
- console.log('UI unit tests passed: existing v7 rules/presentation, isolated v1..v7 checkpoints, named snapshot bounds and preservation, replacement guards, storage failures, delayed imports and repeated clicks. Mocked DOM/transport, not browser or human playtesting.');
+ // Practice uses real replay-shaped prefixes but mocked state here; native tests validate the catalog's actual tactics.
+ const demos=JSON.parse(run('JSON.stringify(PRACTICE_DEMOS)'));
+ assert.deepEqual(demos.map(d=>[d.id,d.replay.actions.length]),[['shared-crossing',27],['mixed-siege',24]]);
+ const practiceGame=index=>({...start,actions:demos[index].replay.actions});
+ const protectedCampaign={...start,map:{...start.map,scenario:2},actions:[pass,move,recruit]};
+ setGame(protectedCampaign);run('checkpoint();selected=5');const practiceStorage=new Map(storage);let practiceWrites=0;
+ context.localStorage.setItem=(key,value)=>{practiceWrites++;return normalSet(key,value)};
+ const unchangedPracticeStorage=()=>{assert.deepEqual([...storage],[...practiceStorage]);assert.equal(practiceWrites,0)};
+ // Entry is staged: Fe rejection retains ordinary campaign and selected territory.
+ get('practice-list').value=demos[0].id;response={ok:false,json:async()=>({error:'Practice rejected'})};await get('practice-start').onclick();
+ assert.equal(run('practiceSession'),null);assert.equal(run('selected'),5);assert.deepEqual(JSON.parse(run('JSON.stringify(replay().actions)')),protectedCampaign.actions);unchangedPracticeStorage();
+ reply(practiceGame(0));before=fetches;const entering=get('practice-start').onclick();await get('practice-start').onclick();await entering;
+ assert.equal(fetches,before+1);assert.equal(run('practiceSession.id'),demos[0].id);assert.equal(requests.at(-1).mode,1);assert.deepEqual(requests.at(-1).actions,demos[0].replay.actions);
+ assert.deepEqual(Object.keys(requests.at(-1)).sort(),['actions','difficulty','mode','scenario','version']);
+ assert.equal(get('practice-banner').hidden,false);assert.match(get('practice-description').textContent,/Prepared example.*NOT saved/);assert.match(get('practice-source').textContent,/Model-selected Blue.*not human/);
+ assert.equal(get('snapshot-save').disabled,true);assert.equal(get('snapshot-replace').disabled,true);assert.equal(get('snapshot-delete').disabled,true);assert.equal(get('save').disabled,false);
+ assert.equal(get('snapshot-save').onclick(),false);assert.equal(get('snapshot-replace').onclick(),false);assert.equal(get('snapshot-delete').onclick(),false);run('checkpoint()');unchangedPracticeStorage();
+ // Human actions and native Red requests continue in practice without ANY storage writes.
+ const practiceRed={...practiceGame(0),state:{...start.state,side:2},actions:[...demos[0].replay.actions,recruit]};reply(practiceRed);
+ await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(run('practiceSession.id'),demos[0].id);unchangedPracticeStorage();
+ reply({...practiceGame(0),actions:[...practiceRed.actions,ai]});await get('global-actions').children[0].onclick();assert.equal(requests.at(-1).mode,0);unchangedPracticeStorage();
+ // Failed/reset/switch/return preserve old context; reset ignores a different selector value.
+ get('practice-list').value=demos[1].id;response={ok:false,json:async()=>({error:'Reset rejected'})};const beforeReset=run('JSON.stringify(replay())');
+ await get('practice-reset').onclick();assert.equal(run('JSON.stringify(replay())'),beforeReset);assert.equal(run('practiceSession.id'),demos[0].id);
+ reply(practiceGame(0));before=fetches;const resetting=get('practice-reset').onclick();await get('practice-reset').onclick();await resetting;assert.equal(fetches,before+1);assert.deepEqual(requests.at(-1).actions,demos[0].replay.actions);unchangedPracticeStorage();
+ response={ok:false,json:async()=>({error:'Switch rejected'})};await get('practice-start').onclick();assert.equal(run('practiceSession.id'),demos[0].id);
+ reply(practiceGame(1));await get('practice-start').onclick();assert.equal(run('practiceSession.id'),demos[1].id);unchangedPracticeStorage();
+ response={ok:false,json:async()=>({error:'Return rejected'})};await get('practice-return').onclick();assert.equal(run('practiceSession.id'),demos[1].id);assert.equal(get('practice-banner').hidden,false);unchangedPracticeStorage();
+ reply(protectedCampaign);before=fetches;const returning=get('practice-return').onclick();await get('practice-return').onclick();await returning;assert.equal(fetches,before+1);
+ assert.equal(run('practiceSession'),null);assert.equal(get('practice-banner').hidden,true);assert.equal(run('replay().scenario'),2);assert.deepEqual(requests.at(-1).actions,protectedCampaign.actions);unchangedPracticeStorage();
+ // Subsequent ordinary campaign orders resume autosave, after the write-free return.
+ reply({...protectedCampaign,actions:[...protectedCampaign.actions,recruit]});await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(practiceWrites,1);
+ context.localStorage.setItem=normalSet;
+ // An unsaved in-memory campaign cannot enter practice until a matching snapshot protects it.
+ const memoryOnly={...start,actions:[move,pass,recruit,move]};setGame(memoryOnly);before=fetches;reply(practiceGame(0));get('practice-list').value=demos[0].id;
+ await get('practice-start').onclick();assert.equal(fetches,before);assert.equal(run('practiceSession'),null);assert.match(get('error').textContent,/Save a named snapshot/);
+ get('snapshot-list').value=slots()[0].id;accept=true;assert.equal(get('snapshot-replace').onclick(),true);
+ const beforeProtectedEntry=new Map(storage);reply(practiceGame(0));await get('practice-start').onclick();reply(memoryOnly);await get('practice-return').onclick();assert.deepEqual([...storage],[...beforeProtectedEntry]);assert.deepEqual(JSON.parse(run('JSON.stringify(replay().actions)')),memoryOnly.actions);
+ // Other navigation cancels/rejects without abandoning practice; successful navigation exits only on response.
+ setGame(protectedCampaign);run('checkpoint()');reply(practiceGame(0));await get('practice-start').onclick();accept=false;before=fetches;
+ await get('new').onclick();assert.equal(fetches,before);assert.equal(run('practiceSession.id'),demos[0].id);
+ get('file').files=[{size:100,text:async()=>JSON.stringify({version:7,scenario:0,difficulty:0,actions:[]})}];await get('file').onchange();assert.equal(fetches,before);assert.equal(run('practiceSession.id'),demos[0].id);
+ accept=true;
+ const navigation=[()=>get('new').onclick(),()=>get('resume').onclick(),()=>get('legacy').onclick(),()=>get('snapshot-load').onclick(),()=>{get('file').files=[{size:100,text:async()=>JSON.stringify({version:7,scenario:0,difficulty:0,actions:[]})}];return get('file').onchange()}];
+ for(const navigate of navigation){
+  response={ok:false,json:async()=>({error:'Navigation rejected'})};const oldPosition=run('JSON.stringify(replay())'),oldStorage=new Map(storage);await navigate();
+  assert.equal(run('practiceSession.id'),demos[0].id);assert.equal(run('JSON.stringify(replay())'),oldPosition);assert.deepEqual([...storage],[...oldStorage]);
+ }
+ let finishPracticeImport;get('file').files=[{size:100,text:()=>new Promise(resolve=>{finishPracticeImport=resolve})}];const practiceImport=get('file').onchange();before=fetches;
+ await get('practice-reset').onclick();await get('practice-return').onclick();await get('practice-start').onclick();assert.equal(fetches,before);assert.equal(run('practiceSession.id'),demos[0].id);
+ finishPracticeImport('{bad');await practiceImport;assert.equal(run('busy'),false);assert.equal(run('practiceSession.id'),demos[0].id);
+ for(let i=0;i<navigation.length;i++){
+  reply(i===2?legacy:start);await navigation[i]();assert.equal(run('practiceSession'),null);assert.equal(get('practice-banner').hidden,true);
+  setGame(protectedCampaign);run('checkpoint()');reply(practiceGame(0));await get('practice-start').onclick();assert.equal(run('practiceSession.id'),demos[0].id);
+ }
+ // Legacy view entry returns the stored v7 campaign, not the old read-only replay.
+ reply(legacy);await get('legacy').onclick();const legacyPracticeStorage=new Map(storage);reply(practiceGame(0));await get('practice-start').onclick();assert.equal(run('practiceSession.returnReplay.version'),7);
+ reply(protectedCampaign);await get('practice-return').onclick();assert.deepEqual([...storage],[...legacyPracticeStorage]);
+ // No campaign is invented when starting practice without one; ordinary reload resumes only the real checkpoint.
+ const savedForPractice=storage.get(checkpointKey);storage.delete(checkpointKey);run('game=null');reply(practiceGame(0));await get('practice-start').onclick();assert.equal(run('practiceSession.returnReplay'),null);assert.equal(get('practice-return').disabled,true);assert.equal(storage.has(checkpointKey),false);
+ reply(start);await get('new').onclick();assert.equal(run('practiceSession'),null);storage.set(checkpointKey,savedForPractice);
+ for(const [key,value] of frozenKeys)assert.equal(storage.get(key),value);
+ console.log('UI unit tests passed: named snapshot safeguards and write-free prepared practice entry/orders/AI/reset/return, protected campaign restoration, failure/cancel preservation and repeated clicks. Mocked DOM/transport, not browser or human playtesting.');
 })().catch(e=>{console.error(e);process.exitCode=1});

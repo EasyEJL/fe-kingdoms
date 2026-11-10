@@ -25,6 +25,9 @@
 <p id="snapshot-status" role="status" aria-live="polite"></p>
 </details>
 <p id="storage-warning" class="error" role="alert"></p>
+<details><summary>Prepared practice examples</summary><p>Start several turns into a recorded model match. These are prepared examples, not injected positions or human playtests. Try either choice, then reset. Practice progress is not saved; your campaign and snapshots are kept separate.</p>
+<div class="toolbar"><label for="practice-list">Example</label><select id="practice-list"></select><button id="practice-start">Start selected example</button></div></details>
+<div id="practice-banner" class="panel" hidden><p id="practice-description"></p><p id="practice-source" class="muted"></p><button id="practice-reset">Reset example</button><button id="practice-return">Return to campaign</button></div>
 <div id="notice" role="status" aria-live="polite"></div>
 <div id="human-activity" class="muted" aria-live="polite"></div><div id="activity" class="muted" aria-live="polite"></div>
 <div id="error" class="error" role="alert"></div>
@@ -57,6 +60,39 @@ const names=['Neutral','Blue','Red'];
 let game=null, selected=null, busy=false, mapZoom=1;
 const CURRENT_VERSION=7, CHECKPOINT='fe-kingdoms-v7', RIVERS_CHECKPOINT='fe-kingdoms-v6', ROUNDS_CHECKPOINT='fe-kingdoms-v5', ROLES_CHECKPOINT='fe-kingdoms-v4', CAMPAIGN_CHECKPOINT='fe-kingdoms-v3', PREVIOUS_CHECKPOINT='fe-kingdoms-v2', LEGACY_CHECKPOINT='fe-kingdoms-v1';
 const SNAPSHOTS='fe-kingdoms-v7-slots-v1';
+// BEGIN PRACTICE CATALOG
+const PRACTICE_DEMOS=[
+ {"id":"shared-crossing","title":"A bridge for whom?","prompt":"Build C3 from B3: the new crossing starts neutral and empty, and either side can use it. Compare occupying it with holding your position, then run Red. Check the Fe forecasts; neither choice is claimed to be best.","source":"Prepared from docs/playtests/v7-sol-small.json, first 27 actions. Model-selected Blue and native Fe Red; not human playtesting or an injected state.","replay":{"version":7,"scenario":0,"difficulty":0,"actions":[[1,0,1,5],[1,1,6,7],[2,9,9,2],[2,9,9,2],[4,6,6,2],[3,6,6,1],[1,9,8,4],[2,8,8,2],[11,6,6,2],[1,6,11,2],[1,8,3,3],[2,8,8,2],[2,6,6,2],[5,6,6,1],[2,8,8,2],[1,8,7,4],[6,6,6,1],[0,0,0,0],[2,8,8,2],[2,8,8,2],[2,6,6,2],[2,6,6,2],[2,8,8,2],[2,8,8,2],[1,6,7,10],[4,3,3,1],[1,14,9,5]]}},
+ {"id":"mixed-siege","title":"Bring the siege, or keep an order?","prompt":"Inspect B2 to C2. Moving 10 includes siege and uses both orders; moving 5 leaves siege behind and keeps an order. Compare Fe's moving forces and survivors, then try the remaining fortify choice after the smaller attack. Neither choice is claimed to be best.","source":"Prepared from docs/playtests/v7-sol-small.json, first 24 actions. Model-selected Blue and native Fe Red; not human playtesting or an injected state.","replay":{"version":7,"scenario":0,"difficulty":0,"actions":[[1,0,1,5],[1,1,6,7],[2,9,9,2],[2,9,9,2],[4,6,6,2],[3,6,6,1],[1,9,8,4],[2,8,8,2],[11,6,6,2],[1,6,11,2],[1,8,3,3],[2,8,8,2],[2,6,6,2],[5,6,6,1],[2,8,8,2],[1,8,7,4],[6,6,6,1],[0,0,0,0],[2,8,8,2],[2,8,8,2],[2,6,6,2],[2,6,6,2],[2,8,8,2],[2,8,8,2]]}}
+];
+// END PRACTICE CATALOG
+let practiceSession=null;
+function renderPractice(){
+ $('practice-banner').hidden=!practiceSession;
+ if(!practiceSession)return;
+ const demo=PRACTICE_DEMOS.find(d=>d.id===practiceSession.id);
+ $('practice-description').textContent='Prepared example: '+demo.title+'. Practice progress is NOT saved. '+demo.prompt;
+ $('practice-source').textContent=demo.source+' '+(practiceSession.returnReplay?'Return restores your protected campaign.':'No campaign was available to return to; start a New game when finished.');
+}
+function startPractice(reset=false){
+ if(busy||reset&&!practiceSession)return Promise.resolve(false);
+ try{
+  const demo=PRACTICE_DEMOS.find(d=>d.id===(reset?practiceSession.id:$('practice-list').value));if(!demo)throw Error('Select a prepared example.');
+  let returnReplay=practiceSession?.returnReplay||null;
+  if(!practiceSession){
+   const raw=localStorage.getItem(CHECKPOINT),saved=raw===null?null:JSON.parse(raw);
+   if(saved&&!snapshotReplay({...saved,scenario:saved.scenario??0}))throw Error('The campaign checkpoint is unsupported. Existing data was preserved.');
+   returnReplay=game&&!readOnly()?replay():saved;
+   if(returnReplay&&!sameReplay(returnReplay,saved)&&!readSnapshots().slots.some(s=>sameReplay(s.replay,returnReplay)))throw Error('Save a named snapshot of your current campaign before entering practice; its latest progress is not in the checkpoint.');
+   if(returnReplay)returnReplay=JSON.parse(JSON.stringify(returnReplay));
+  }
+  return request({...demo.replay,mode:1},true,{session:{id:demo.id,returnReplay}});
+ }catch(e){$('error').textContent='Cannot start practice: '+e.message;return Promise.resolve(false);}
+}
+function returnFromPractice(){
+ if(busy||!practiceSession?.returnReplay)return Promise.resolve(false);
+ return request({...practiceSession.returnReplay,mode:1},true,{session:null,skipCheckpoint:true});
+}
 let checkpointWarning='',snapshotWarning='';
 function storageWarning(kind,message){if(kind==='checkpoint')checkpointWarning=message;else snapshotWarning=message;$('storage-warning').textContent=[checkpointWarning,snapshotWarning].filter(Boolean).join(' ');}
 function snapshotReplay(data){
@@ -84,7 +120,7 @@ function renderSnapshots(){
  }catch(e){snapshotFailure(e);}
 }
 function changeSnapshot(kind){
- if(busy)return false;
+ if(busy||practiceSession)return false;
  try{
   const data=readSnapshots(),id=$('snapshot-list').value,index=data.slots.findIndex(s=>s.id===id);
   if(kind!=='save'&&index<0)throw Error('Select a saved snapshot.');
@@ -115,7 +151,7 @@ function maySwitch(target){
   if(raw!==null){try{saved=JSON.parse(raw);if(!snapshotReplay({...saved,scenario:saved?.scenario??0}))throw Error();}catch{storageWarning('checkpoint','The current checkpoint is corrupt or unsupported. It has been preserved; replacement is blocked.');return false;}}
   const snapshots=(()=>{try{return readSnapshots().slots;}catch(e){snapshotFailure(e);return [];}})();
   const protectedReplay=r=>sameReplay(r,target)||snapshots.some(s=>sameReplay(s.replay,r));
-  const lostCurrent=game&&!readOnly()&&!protectedReplay(replay())&&!(target.version!==CURRENT_VERSION&&sameReplay(replay(),saved));
+  const lostCurrent=game&&!practiceSession&&!readOnly()&&!protectedReplay(replay())&&!(target.version!==CURRENT_VERSION&&sameReplay(replay(),saved));
   const lostSaved=target.version===CURRENT_VERSION&&saved&&!protectedReplay(saved);
   return !(lostCurrent||lostSaved)||confirm('Replace the current campaign position? Any progress not in a named snapshot or exported replay will be lost. Cancel to save it first, or OK to discard it.');
  }catch(e){storageWarning('checkpoint','Cannot read the campaign checkpoint: '+e.message+'. Switching is blocked; export your current replay.');return false;}
@@ -228,7 +264,7 @@ function renderSearch(){
  }
 }
 function checkpoint(){
- if(readOnly())return;
+ if(readOnly()||practiceSession)return;
  try{
   const raw=localStorage.getItem(CHECKPOINT);
   if(raw!==null){const data=JSON.parse(raw);if(!snapshotReplay({...data,scenario:data?.scenario??0}))throw Error('Existing checkpoint is corrupt or unsupported and was preserved');}
@@ -236,7 +272,7 @@ function checkpoint(){
  }catch(e){storageWarning('checkpoint','Current progress is NOT saved locally: '+e.message+'. Export the replay before leaving.');}
 }
 function replay(){return {version:game.version,scenario:game.map?.scenario??0,difficulty:game.difficulty,actions:game.actions};}
-function setBusy(value){busy=value;document.querySelectorAll('button,select,input').forEach(el=>el.disabled=value);$('save').disabled=value||!game;$('snapshot-save').disabled=$('snapshot-replace').disabled=value||!game||readOnly();}
+function setBusy(value){busy=value;document.querySelectorAll('button,select,input').forEach(el=>el.disabled=value);$('save').disabled=value||!game;$('snapshot-save').disabled=$('snapshot-replace').disabled=value||!game||readOnly()||!!practiceSession;$('snapshot-delete').disabled=value||!!practiceSession;$('practice-reset').disabled=value||!practiceSession;$('practice-return').disabled=value||!practiceSession?.returnReplay;}
 function actionButton(a,index){
  const p=game.previews&&game.previews[index],b=document.createElement('button');b.className=p&&p.outcome===3?'risky':'';
  const title=document.createElement('span');title.textContent=a[0]===0?'End my turn (skip '+game.state.orders+' remaining '+(game.state.orders===1?'order':'orders')+')':actionName(a)+(isDecision(a)?' | campaign decision':p&&p.orderCost!==undefined?' | '+p.orderCost+' '+(p.orderCost===1?'order':'orders'):game.version<7?' | 1 order':' | Check Fe order cost');b.append(title);
@@ -248,6 +284,7 @@ function actionButton(a,index){
 function selectTerritory(index,focusId){if(busy)return;selected=selected===index?null:index;render();if(focusId)$(focusId)?.focus({preventScroll:true});}
 function render(){
  if(!game)return;
+ renderPractice();
  const s=game.state,m=mapInfo(),budget=m.orderBudget||2,legacy=readOnly();
  $('terrain-guide').textContent=game.version>=7?'Mountains and rivers block movement and supply; cross at fixed bridges or build shared crossings at marked sites. Built bridges start neutral and empty; occupied bridges add 1 defense. Forest adds 1 defense with defending infantry. Moving siege uses 2 orders anywhere; cavalry uses 2 entering forest. Check Fe forecasts for the actual detachment and cost.':game.version>=6?'Mountains and rivers block movement and supply; route around mountains and cross rivers at fixed bridges. Bridges add 1 defense.':game.version===1?'Original square-map rules. Inspect tiles and export this read-only replay.':game.version===2?'Original hex-map rules. Inspect tiles and export this read-only replay.':'Mountains block movement and supply; passes cross the ridge. Original v'+game.version+' campaign rules.';
  $('difficulty').value=String(game.difficulty);
@@ -336,9 +373,10 @@ async function request(payload, resetSelection=false, feedback={},locked=false){
   const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const data=await r.json();if(!r.ok)throw Error(data.error||'Request failed.');
   game=data;
+  if(Object.prototype.hasOwnProperty.call(feedback,'session'))practiceSession=feedback.session;
   if(game.version>=7)game.decisions=payload.mode===0?(game.decisions||[]).filter(d=>d.traceIndex>=payload.actions.length&&decisionMatches(d)).slice(-2):[];
   if(resetSelection)selected=null;
-  render();checkpoint();$('notice').textContent='';
+  render();if(!feedback.skipCheckpoint)checkpoint();$('notice').textContent='';
   if(feedback.kind==='human'){
    if(isDecision(feedback.action))$('activity').textContent='';
    $('human-activity').textContent='Your last order: '+actionName(feedback.action)+'. '+forecast(feedback.action,feedback.preview,true);
@@ -354,14 +392,14 @@ async function request(payload, resetSelection=false, feedback={},locked=false){
 }
 function load(text,locked=false){
  if(busy&&!locked)return Promise.resolve(false);
- try{const data=JSON.parse(text);if(!data||![1,2,3,4,5,6,7].includes(data.version))throw Error('Unsupported replay version.');if(!maySwitch(data))return Promise.resolve(false);return request({version:data.version,scenario:data.scenario??0,mode:1,difficulty:data.difficulty,actions:data.actions},true,{},locked);}
+ try{const data=JSON.parse(text);if(!data||![1,2,3,4,5,6,7].includes(data.version))throw Error('Unsupported replay version.');if(!maySwitch(data))return Promise.resolve(false);return request({version:data.version,scenario:data.scenario??0,mode:1,difficulty:data.difficulty,actions:data.actions},true,{session:null},locked);}
  catch(e){$('error').textContent='Cannot load replay: '+e.message;return Promise.resolve(false);}
 }
 $('new').onclick=()=>{
  if(busy)return;
  const data={version:CURRENT_VERSION,scenario:Number($('scenario').value),mode:1,difficulty:Number($('difficulty').value),actions:[]};
  if(!maySwitch(data))return;
- return request(data,true,{kind:'new'});
+ return request(data,true,{kind:'new',session:null});
 };
 $('save').onclick=()=>{if(!game)return;const url=URL.createObjectURL(new Blob([JSON.stringify(replay(),null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='fe-kingdoms-replay.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('load').onclick=()=>{if(!busy)$('file').click();};
@@ -388,6 +426,11 @@ $('snapshot-load').onclick=()=>{
  catch(e){snapshotFailure(e);return Promise.resolve(false);}
 };
 renderSnapshots();
+for(const demo of PRACTICE_DEMOS){const option=document.createElement('option');option.value=demo.id;option.textContent=demo.title;$('practice-list').append(option);}
+$('practice-list').value=PRACTICE_DEMOS[0].id;
+$('practice-start').onclick=()=>startPractice();
+$('practice-reset').onclick=()=>startPractice(true);
+$('practice-return').onclick=returnFromPractice;
 let saved=false,storageReadable=true,oldSaved=false,previousSaved=false,campaignSaved=false,rolesSaved=false,roundsSaved=false,riversSaved=false;try{saved=localStorage.getItem(CHECKPOINT)!==null;riversSaved=!!localStorage.getItem(RIVERS_CHECKPOINT);roundsSaved=!!localStorage.getItem(ROUNDS_CHECKPOINT);rolesSaved=!!localStorage.getItem(ROLES_CHECKPOINT);oldSaved=!!localStorage.getItem(LEGACY_CHECKPOINT);previousSaved=!!localStorage.getItem(PREVIOUS_CHECKPOINT);campaignSaved=!!localStorage.getItem(CAMPAIGN_CHECKPOINT);}catch(e){storageReadable=false;storageWarning('checkpoint','Cannot read browser storage: '+e.message+'. Automatic startup is paused to preserve existing data.');}
 $('rivers').hidden=!riversSaved;
 $('rounds').hidden=!roundsSaved;

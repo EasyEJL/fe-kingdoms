@@ -45,3 +45,6 @@ Add an ADR for a meaningful architectural or rules decision, not every implement
 - [Development-map study](experiments/development-map.md): measured existing-map development openings and a proposed, unimplemented larger-map experiment.
 
 - [ADR 0015: Explicit named campaign snapshots](adr/0015-named-campaign-snapshots.md).
+
+- [V7 Astra strategy comparison](playtests/2026-11-10-v7-astra.md): bounded rush/development evidence and a future opponent-version A/B protocol.
+- [ADR 0016: Isolated practice replays](adr/0016-isolated-practice-replays.md).

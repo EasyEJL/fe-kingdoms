@@ -59,6 +59,12 @@ Named snapshots are manual restore points: they do not change as you continue pl
 
 Storage failures stay visible. Export replays for durable backups and to move games between browser profiles or preview ports. This feature does not sync to a server or alter Fe rules.
 
+### Prepared practice examples
+
+Open **Prepared practice examples** and start either short position. **A bridge for whom?** shows that a newly built crossing belongs to nobody and may help Red. **Bring the siege, or keep an order?** compares a larger two-order detachment with a smaller capture followed by fortification.
+
+These positions are exact prefixes of a recorded model-versus-Fe game. Both choices are legal; neither is labeled optimal. The normal Fe engine handles every order and opponent response. Practice does not autosave or change campaign snapshots. Use **Reset example** to retry, or **Return to campaign** to restore the protected campaign. If current progress is not safely saved, entry is blocked until a named snapshot protects it. Portable replay export remains available.
+
 ## Current verification and balance limits
 
 The campaign milestone has directed Fe tests for maps, routes, economy, supply, settlements, bounds and opponent determinism, plus adapter/UI/replay/full-match checks. See `docs/validation.md` and the latest generated evidence for actual results.
