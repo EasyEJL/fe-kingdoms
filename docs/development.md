@@ -43,3 +43,5 @@ Do not add credentials, private keys, local environment files, binaries or unrel
 ## Isolated mechanics development
 
 The campaign-expansion branch uses a separate worktree at C:\Users\Eric\dev\fe-kingdoms-campaign and scripts/preview.ps1 on port 8767. Keep the original game (8765) and visual preview (8766) running unchanged during development. Each origin has separate browser storage. Do not replace an active preview underneath a human match; announce readiness and let the player choose a fresh game or export the current replay first. Old-version saves remain read-only on newer rules.
+
+Overnight frontier work uses feature/frontier-expansion in C:\Users\Eric\dev\fe-kingdoms-frontiers. Its separate preview launcher reserves port8768 and container fe-kingdoms-frontiers, leaving all three prior previews unchanged. V7 is unreleased across staged feature commits; preserve frozen v6 but do not promise compatibility for intermediate v7 development saves. Do not run launch.ps1 to replace a live game.

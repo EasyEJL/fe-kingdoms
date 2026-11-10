@@ -3,7 +3,7 @@ import unittest
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from server import request_text, decode, game, Handler, ThreadingHTTPServer
+from server import CURRENT_VERSION, request_text, decode, game, Handler, ThreadingHTTPServer
 import threading
 import http.client
 import subprocess
@@ -11,20 +11,20 @@ import subprocess
 
 class AdapterTests(unittest.TestCase):
     def test_protocol_serialization(self):
-        self.assertEqual(request_text({'version':6,'mode': 0, 'difficulty': 1, 'actions': [[1, 0, 1, 3]]}), '6 0 1 0 1\n1 0 1 3\n')
+        self.assertEqual(request_text({'version':CURRENT_VERSION,'mode': 0, 'difficulty': 1, 'actions': [[1, 0, 1, 3]]}), f'{CURRENT_VERSION} 0 1 0 1\n1 0 1 3\n')
 
     def test_transport_rejects_invalid_shapes(self):
         cases = [None, {}, {'difficulty': True, 'actions': []}, {'difficulty': 0, 'actions': [[1, 0, 1]]}, {'difficulty': 0, 'actions': [[1, 0, 1, -1]]}, {'difficulty': 0, 'actions': [[1, 0, 1, True]]}, {'difficulty': 0, 'actions': [[0, 0, 0, 0]]*2049}, {'difficulty': 0, 'actions': [], 'shell': 'x'}]
         for data in cases:
             with self.subTest(data=data):
-                with self.assertRaises(ValueError): request_text(dict(version=6, mode=1, **data) if isinstance(data, dict) else data)
+                with self.assertRaises(ValueError): request_text(dict(version=CURRENT_VERSION, mode=1, **data) if isinstance(data, dict) else data)
 
     def test_decoder_rejects_incomplete_output(self):
         with self.assertRaises(RuntimeError): decode('0 4 0 0\n')
 
     def test_decoder_requires_current_supply_metadata(self):
         root=Path(__file__).resolve().parents[1]
-        output=subprocess.run([str(root/'out/kingdom')],input='6 1 0 0 0\n',text=True,capture_output=True,check=True).stdout
+        output=subprocess.run([str(root/'out/kingdom')],input=f'{CURRENT_VERSION} 1 0 0 0\n',text=True,capture_output=True,check=True).stdout
         parsed=decode(output)
         self.assertEqual(len(parsed['supply']),2)
         for malformed in (
@@ -33,6 +33,24 @@ class AdapterTests(unittest.TestCase):
             output.replace('8 2 ','8 1 ',1),
         ):
             with self.assertRaises(RuntimeError):decode(malformed)
+
+    def test_decoder_requires_version_specific_field_widths(self):
+        root=Path(__file__).resolve().parents[1]
+        for version in range(1,CURRENT_VERSION+1):
+            name='kingdom' if version==CURRENT_VERSION else f'kingdom-v{version}'
+            wire=request_text(dict(version=version,mode=1,difficulty=0,actions=[]))
+            output=subprocess.run([str(root/'out'/name)],input=wire,text=True,capture_output=True,check=True).stdout
+            parsed=decode(output)
+            self.assertEqual(len(parsed['tiles'][0]),{1:8,2:8,3:11,4:14,5:14,6:14,7:18}[version])
+            self.assertEqual(len(parsed['previews'][0]),{1:10,2:10,3:14,4:24,5:24,6:28,7:32}[version])
+            self.assertEqual('defense' in parsed['tiles'][0],version>=7)
+            self.assertEqual('orderCost' in parsed['previews'][0],version>=7)
+            for tag in ('2 ','5 '):
+                for delta in (-1,1):
+                    lines=output.splitlines()
+                    index=next(i for i,line in enumerate(lines) if line.startswith(tag))
+                    lines[index]=' '.join(lines[index].split()[:-1]) if delta<0 else lines[index]+' 0'
+                    with self.assertRaises(RuntimeError):decode('\n'.join(lines))
 
     def test_http_transport_guards(self):
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
@@ -64,17 +82,17 @@ class AdapterTests(unittest.TestCase):
 
     def test_native_roundtrip_and_replay(self):
         for difficulty in (0, 1):
-            start = game({'version':6,'mode': 0, 'difficulty': difficulty, 'actions': []})
+            start = game({'version':CURRENT_VERSION,'mode': 0, 'difficulty': difficulty, 'actions': []})
             self.assertEqual(start['state']['side'], 1)
             self.assertEqual(len(start['tiles']), 15)
             self.assertTrue(start['legal'])
             # The end-turn order is supplied by Fe, not recreated by the host.
             end = next(a for a in start['legal'] if a[0] == 0)
-            after = game({'version':6,'mode': 0, 'difficulty': difficulty, 'actions': [end]})
+            after = game({'version':CURRENT_VERSION,'mode': 0, 'difficulty': difficulty, 'actions': [end]})
             self.assertGreater(len(after['actions']), 1)
             self.assertIn(after['state']['side'], (1, 2))
             self.assertTrue(after['state']['result'] or after['state']['side'] == 1)
-            replay = game({'version':6,'mode': 1, 'difficulty': difficulty, 'actions': after['actions']})
+            replay = game({'version':CURRENT_VERSION,'mode': 1, 'difficulty': difficulty, 'actions': after['actions']})
             self.assertEqual(after['tiles'], replay['tiles'])
             self.assertEqual(after['actions'], replay['actions'])
             for field in ('side','orders','turn','result','gold1','gold2','quiet'):
@@ -82,14 +100,14 @@ class AdapterTests(unittest.TestCase):
 
     def test_explicit_two_order_handoff(self):
         for difficulty in (0, 1):
-            start = game({'version':6,'mode': 1, 'difficulty': difficulty, 'actions': []})
+            start = game({'version':CURRENT_VERSION,'mode': 1, 'difficulty': difficulty, 'actions': []})
             recruit = next(a for a in start['legal'] if a == [2,0,0,2])
-            first = game({'version':6,'mode':1,'difficulty':difficulty,'actions':[recruit]})
+            first = game({'version':CURRENT_VERSION,'mode':1,'difficulty':difficulty,'actions':[recruit]})
             self.assertEqual((first['state']['side'],first['state']['orders'],len(first['actions'])),(1,1,1))
-            second = game({'version':6,'mode':1,'difficulty':difficulty,'actions':[recruit,recruit]})
+            second = game({'version':CURRENT_VERSION,'mode':1,'difficulty':difficulty,'actions':[recruit,recruit]})
             self.assertEqual((second['state']['side'],second['state']['orders'],len(second['actions'])),(2,2,2))
             # Only this explicit request gives the computer its turn.
-            returned = game({'version':6,'mode':0,'difficulty':difficulty,'actions':second['actions']})
+            returned = game({'version':CURRENT_VERSION,'mode':0,'difficulty':difficulty,'actions':second['actions']})
             self.assertEqual((returned['state']['side'],returned['state']['orders']),(1,2))
             self.assertGreater(len(returned['actions']),2)
 
@@ -99,11 +117,13 @@ class AdapterTests(unittest.TestCase):
             # Upgrade a starting village, cycle turns, then create a mixed army.
             [[4,5,5,2],[1,0,5,3],[0,0,0,0],[1,0,1,1],[0,0,0,0],[0,0,0,0],[6,5,5,1]],
             [[4,5,5,2],[1,0,5,3],[0,0,0,0],[7,5,5,1]],
+            # A fresh turn exposes two-order mixed-army movements.
+            [[4,5,5,2],[1,0,5,3],[0,0,0,0],[7,5,5,1],[0,0,0,0],[0,0,0,0]],
         ):
-            start=game({'version':6,'mode':1,'difficulty':0,'actions':trace})
+            start=game({'version':CURRENT_VERSION,'mode':1,'difficulty':0,'actions':trace})
             self.assertEqual(len(start['previews']),len(start['legal']))
             for action,preview in zip(start['legal'],start['previews']):
-                after=game({'version':6,'mode':1,'difficulty':0,'actions':trace+[action]})
+                after=game({'version':CURRENT_VERSION,'mode':1,'difficulty':0,'actions':trace+[action]})
                 self.assertEqual(preview['sourceTroops'],after['tiles'][action[1]]['troops'])
                 self.assertEqual(preview['targetTroops'],after['tiles'][action[2]]['troops'])
                 self.assertEqual(preview['targetOwner'],after['tiles'][action[2]]['owner'])
@@ -120,18 +140,45 @@ class AdapterTests(unittest.TestCase):
                     self.assertEqual(preview[color+'ConnectedAfter'],after['supply'][side-1]['connectedOwned'])
                     self.assertEqual(preview[color+'CutOffAfter'],after['supply'][side-1]['cutOffOwned'])
                 self.assertEqual(preview['settlementAfter'],after['tiles'][action[2]]['settlement'])
+                for field in ('specialty','terrain','passable'):
+                    self.assertEqual(preview['target'+field.capitalize()],after['tiles'][action[2]][field])
+                if action[0]==1 and start['tiles'][action[2]]['owner']!=start['state']['side']:
+                    self.assertEqual(preview['defense'],start['tiles'][action[2]]['defense'])
+                if not after['state']['result']:
+                    remaining=after['state']['orders'] if after['state']['side']==start['state']['side'] else 0
+                    self.assertEqual(preview['orderCost'],start['state']['orders']-remaining)
                 field='gold'+str(start['state']['side'])
                 self.assertEqual(preview['cost'],start['state'][field]-after['state'][field])
-        start=game({'version':6,'mode':1,'difficulty':0,'actions':[]})
+        start=game({'version':CURRENT_VERSION,'mode':1,'difficulty':0,'actions':[]})
         attack=start['legal'].index([1,1,6,1])
         self.assertEqual(start['previews'][attack]['outcome'],3)
         self.assertEqual(start['previews'][attack]['targetTroops'],1)
-        prepared=game({'version':6,'mode':1,'difficulty':0,'actions':[[1,0,5,5]]})
+        prepared=game({'version':CURRENT_VERSION,'mode':1,'difficulty':0,'actions':[[1,0,5,5]]})
         capture=prepared['legal'].index([1,5,6,5])
         self.assertEqual(prepared['previews'][capture]['outcome'],2)
-        self.assertEqual(prepared['previews'][capture]['targetTroops'],4)
+        self.assertEqual(prepared['previews'][capture]['targetTroops'],3)
 
-    def test_current_win_supply_forecasts(self):
+    def test_forest_opening_and_two_order_moves(self):
+        opening=[[1,0,1,5],[1,1,6,7]]
+        first=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=opening[:1]))
+        self.assertEqual(first['tiles'][6]['terrain'],10)
+        preview=first['previews'][first['legal'].index(opening[1])]
+        self.assertEqual((preview['defense'],preview['orderCost'],preview['outcome']),(2,1,2))
+        after=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=opening))
+        self.assertEqual((after['tiles'][6]['owner'],after['tiles'][6]['troops']),(1,5))
+        trace=[[4,5,5,2],[1,0,5,3],[0,0,0,0],[1,0,1,1],[0,0,0,0],[0,0,0,0],[6,5,5,1],[0,0,0,0],[0,0,0,0]]
+        start=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=trace))
+        heavy=[(a,p) for a,p in zip(start['legal'],start['previews']) if a[0]==1 and p['movingSiege']]
+        self.assertTrue(heavy)
+        for action,preview in heavy:
+            self.assertEqual(preview['orderCost'],2)
+            after=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=trace+[action]))
+            self.assertEqual(after['state']['side'],2)
+        spent=game(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=trace+[[3,0,0,1]]))
+        self.assertEqual(spent['state']['orders'],1)
+        self.assertFalse(any(a[0]==1 and p['movingSiege'] for a,p in zip(spent['legal'],spent['previews'])))
+
+    def test_frozen_v6_win_supply_forecasts(self):
         fixture=json.loads((Path(__file__).parent/'fixtures/current-v6-win.json').read_text())
         actions=fixture['actions']
         captures=0
@@ -148,8 +195,9 @@ class AdapterTests(unittest.TestCase):
         self.assertGreater(captures,0,'The full win must exercise a river bridge capture.')
 
     def test_legacy_replay_readonly(self):
-        for version,winner in ((1,1),(2,2),(3,1),(4,1),(5,1)):
-            fixture=json.loads((Path(__file__).parent/f'fixtures/legacy-v{version}-win.json').read_text())
+        for version,winner in ((1,1),(2,2),(3,1),(4,1),(5,1),(6,1)):
+            filename=f'legacy-v{version}-win.json' if version<6 else 'current-v6-win.json'
+            fixture=json.loads((Path(__file__).parent/'fixtures'/filename).read_text())
             legacy=game(dict(fixture,mode=1))
             self.assertEqual(legacy['version'],version)
             self.assertEqual(legacy['map']['topology'],0 if version==1 else 1)
@@ -158,7 +206,7 @@ class AdapterTests(unittest.TestCase):
 
     def test_campaign_sizes_and_economy(self):
         for scenario,count,width,height in ((0,15,5,3),(1,35,7,5),(2,45,9,5)):
-            initial=game(dict(version=6,scenario=scenario,mode=1,difficulty=0,actions=[]))
+            initial=game(dict(version=CURRENT_VERSION,scenario=scenario,mode=1,difficulty=0,actions=[]))
             self.assertEqual((initial['map']['count'],initial['map']['width'],initial['map']['height']),(count,width,height))
             self.assertEqual(len(initial['tiles']),count)
             self.assertEqual([e['side'] for e in initial['economy']],[1,2])
@@ -178,8 +226,8 @@ class AdapterTests(unittest.TestCase):
 
     def test_next_turn_food_projection(self):
         for scenario in (0,1,2):
-            before=game(dict(version=6,scenario=scenario,mode=1,difficulty=0,actions=[]))
-            after=game(dict(version=6,scenario=scenario,mode=1,difficulty=0,actions=[[0,0,0,0]]))
+            before=game(dict(version=CURRENT_VERSION,scenario=scenario,mode=1,difficulty=0,actions=[]))
+            after=game(dict(version=CURRENT_VERSION,scenario=scenario,mode=1,difficulty=0,actions=[[0,0,0,0]]))
             self.assertEqual(before['economy'][1]['projectedFood'],after['economy'][1]['food'])
 
     def test_infantry_only_v3_replay_equivalence(self):
@@ -197,7 +245,7 @@ class AdapterTests(unittest.TestCase):
 
     def test_native_rejects_illegal_move(self):
         with self.assertRaises(ValueError):
-            game({'version':6,'mode': 0, 'difficulty': 0, 'actions': [[1, 14, 0, 99]]})
+            game({'version':CURRENT_VERSION,'mode': 0, 'difficulty': 0, 'actions': [[1, 14, 0, 99]]})
 
 
 if __name__ == '__main__':

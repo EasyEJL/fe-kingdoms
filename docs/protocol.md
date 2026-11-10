@@ -1,11 +1,11 @@
-# Native protocol, river-campaign version 6
+# Native protocol, frontier version 7 (unreleased)
 
 The host serializes decimal integers and parses numeric output. Fe owns their game meaning. At most 2,048 actions and 131,072 input bytes are accepted. Invalid input exits 2 without emitting partial successful state; output failure exits 3.
 
 Input:
 
 ```text
-6 MODE DIFFICULTY SCENARIO COUNT
+7 MODE DIFFICULTY SCENARIO COUNT
 KIND FROM TO AMOUNT
 ...COUNT records...
 ```
@@ -18,15 +18,17 @@ Output tags:
 
 - 0: version, difficulty, accepted trace length.
 - 1: side, orders, side-turn number, result, Blue gold, Red gold, consecutive passes, last action's four fields, search nodes, configured depth, completed rounds, current round limit, pending-decision flag, trace-capacity flag.
-- 2: tile index, owner, troops, fort, supplied, terrain, q, r, settlement level, passable, upkeep, infantry, cavalry, siege.
+- 2: tile index, owner, troops, fort, supplied, terrain, q, r, settlement level, passable, upkeep, infantry, cavalry, siege, defense, specialty, crossing site, constructed bridge. There are eighteen tile values. The last three values are reserved as zero until their mechanics are implemented.
 - 3: a legal action's four fields.
 - 4: accepted action index and four fields.
-- 5: legal-action index, outcome, gold cost, source troops after, target troops after, target owner after, next side, next orders, result, defense before, food cost, settlement after, Blue food after, Red food after, moving infantry/cavalry/siege, attack power, remaining source infantry/cavalry/siege, remaining target infantry/cavalry/siege; Blue connected territory after, Blue cut-off territory after, Red connected territory after, Red cut-off territory after. Non-moves emit zero moving composition and attack power. Decisions retain outcome 0; identify them by action kind. Extension forecasts use the real deferred Blue turn transition.
+- 5: legal-action index, outcome, gold cost, source troops after, target troops after, target owner after, next side, next orders, result, defense before, food cost, settlement after, Blue food after, Red food after, moving infantry/cavalry/siege, attack power, remaining source infantry/cavalry/siege, remaining target infantry/cavalry/siege; Blue connected territory after, Blue cut-off territory after, Red connected territory after, Red cut-off territory after; order cost, target specialty, target terrain, target passability after. There are thirty-two forecast values. Non-moves emit zero moving composition and attack power. Decisions retain outcome 0; identify them by action kind. Extension forecasts use the real deferred Blue turn transition.
 - 6: width, height, count, topology, scenario, Blue capital, Red capital, order budget, base full-round limit, extension rounds, trace capacity.
 
 - 7: side, food, gold income, food production, upkeep, production-minus-upkeep, disconnected tiles, projected shortage losses, projected food after next upkeep. Projection uses the same Fe turn transition with an unchanged board.
 - 8: side, connected owned territory, cut-off owned territory. Exactly one record per kingdom, excluding neutral/impassable tiles. The four tag-5 count forecasts use the same Fe supply calculation after apply. A captured tile can increase connected territory without reconnecting an existing holding.
 
-Results: 0 ongoing, 1 Blue victory, 2 Red victory, 3 draw. Owners: 0 neutral, 1 Blue, 2 Red. Terrain: 0 plain, 1 farm, 3 hill, 4 capital, 5 mountain, 7 pass (legacy terrain), 8 river, 9 fixed bridge. Rivers/mountains are impassable; bridges add one defense and do not count as open ground. Settlement: 0 none, 1 village, 2 town. Outcomes: 0 end turn, 1 friendly move, 2 capture, 3 repelled, 4 recruit, 5 fortify, 6 settlement.
+Results: 0 ongoing, 1 Blue victory, 2 Red victory, 3 draw. Owners: 0 neutral, 1 Blue, 2 Red. Terrain: 0 plain, 1 farm, 3 hill, 4 capital, 5 mountain, 7 pass (legacy terrain), 8 river, 9 bridge, 10 forest. Rivers/mountains are impassable; bridges add one defense and do not count as open ground. Forest grants one defense when defenders include infantry. A moving siege detachment costs two orders; otherwise cavalry entering forest costs two; otherwise a move costs one. These costs are emitted by Fe, not inferred by clients. Settlement: 0 none, 1 village, 2 town. Outcomes: 0 end turn, 1 friendly move, 2 capture, 3 repelled, 4 recruit, 5 fortify, 6 settlement.
 
-Version 1 uses the older header without scenario; versions 2, 3, 4 and 5 have the same header shape as v6 but different rules/output fields. The host routes these only to frozen read-only executables. V5 has the campaign fields and trace bounds but no tag-8 supply records or appended supply forecasts. Topology remains 1 for all hex versions. Output schemas must be interpreted by their declared version, not silently reclassified.
+Version 1 uses the older header without scenario; versions 2 through 6 have the same header shape as v7 but different rules/output fields. The host routes these only to frozen read-only executables. V5 has the campaign fields and trace bounds but no tag-8 supply records or appended supply forecasts. Topology remains 1 for all hex versions. Output schemas must be interpreted by their declared version, not silently reclassified.
+
+V6 sources are frozen unchanged for exact read-only replay. V6 tile/forecast records contain fourteen/twenty-eight values. The host checks each version's exact record lengths. Intermediate v7 commits are development milestones, not separately supported save versions.

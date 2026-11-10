@@ -1,6 +1,6 @@
 use core::marker::Copy
 
-// Crownlines v6. The native Fe engine owns every rule and opponent decision.
+// Crownlines v7 (unreleased). Fe owns every rule and opponent decision.
 // Fixed capacities bound memory; scenario metadata selects active map cells.
 const MAX_TILES: usize = 64
 const MAX_ACTIONS: usize = 1024
@@ -138,6 +138,8 @@ fn terrain(_ s: State, _ i: usize) -> i64 {
     if (r == height / 2 && (q == 0 || q == width - 1))
         || (height > 3 && r == 0 && q == width / 2 - 1)
         || (height > 3 && r == height - 1 && q == width / 2 + 1) { return 3 }
+    if (r == 1 && q == width / 2 - 1)
+        || (r == height - 2 && q == width / 2 + 1) { return 10 }
     0
 }
 fn passable(_ s: State, _ i: usize) -> bool {
@@ -253,6 +255,18 @@ fn capture_losses(_ army: Army, _ power: i64, _ defense_power: i64) -> i64 {
     let count = army_size(army)
     // Infantry-only battles reduce to the previous count-minus-defense rule.
     imin(count - 1, (defense_power * count + power - 1) / power)
+}
+// Only the actual moving detachment pays terrain/role costs. A small infantry
+// detachment can therefore leave cavalry or siege behind and still cost one.
+// Mixed armies pay the maximum role cost, never a sum beyond the two-order turn.
+fn move_order_cost(_ s: State, _ target: usize, _ moving: Army) -> i64 {
+    if moving.siege > 0 || (moving.cavalry > 0 && terrain(s, target) == 10) { 2 } else { 1 }
+}
+fn order_cost(_ s: State, _ action: Action) -> i64 {
+    if action.kind == 9 || action.kind == 10 { return 0 }
+    if action.kind == 0 { return s.orders }
+    if action.kind == 1 { return move_order_cost(s, action.to, detachment(army_at(s, action.from), action.amount)) }
+    1
 }
 
 // INITIAL STATE AND SUPPLY
@@ -439,11 +453,13 @@ fn legal(_ s: State) -> Actions {
                         if target < tile_count(s) && passable(s, target) {
                             let full = s.troops[i] - 1
                             let half = s.troops[i] / 2
-                            if s.owner[target] != s.side || s.troops[target] + full <= MAX_TROOPS {
-                                add(Action { kind: 1, from: i, to: target, amount: full })
+                            let full_move = Action { kind: 1, from: i, to: target, amount: full }
+                            let half_move = Action { kind: 1, from: i, to: target, amount: half }
+                            if order_cost(s, full_move) <= s.orders && (s.owner[target] != s.side || s.troops[target] + full <= MAX_TROOPS) {
+                                add(full_move)
                             }
-                            if half != full && (s.owner[target] != s.side || s.troops[target] + half <= MAX_TROOPS) {
-                                add(Action { kind: 1, from: i, to: target, amount: half })
+                            if half != full && order_cost(s, half_move) <= s.orders && (s.owner[target] != s.side || s.troops[target] + half <= MAX_TROOPS) {
+                                add(half_move)
                             }
                         }
                     }
@@ -463,6 +479,7 @@ fn is_legal(_ s: State, _ action: Action) -> bool {
 }
 fn defense(_ s: State, _ tile: usize) -> i64 {
     s.troops[tile] + s.fort[tile] + terrain_profile(terrain(s, tile)).defense_bonus
+        + if terrain(s, tile) == 10 && army_at(s, tile).infantry > 0 { 1 } else { 0 }
 }
 
 // AUTHORITATIVE TRANSITION
@@ -490,7 +507,7 @@ fn apply(_ before: State, _ action: Action) -> State {
         s.orders = 0
     } else {
         s.passes = 0
-        s.orders -= 1
+        s.orders -= order_cost(before, action)
         if action.kind == 2 {
             let profile = unit_profile(0)
             s.gold[player] -= profile.recruit_gold
@@ -578,6 +595,7 @@ fn evaluate_cached(_ s: State, _ root: i64) -> i64 uses (routes: Navigation) {
             let enemy_capital = capital(s, 3 - s.owner[i])
             let distance = if s.owner[i] == 1 { routes.red[i] } else { routes.blue[i] }
             score += sign * (24 + s.troops[i] * 12 + s.fort[i] * 4 + s.cavalry[i] * 8 + s.siege[i] * 12)
+            if terrain(s, i) == 10 && army_at(s, i).infantry > 0 { score += sign * 4 }
             if connected {
                 score += sign * (10 + s.settlement[i] * 18)
                 if terrain(s, i) == 1 { score += sign * 26 }
@@ -640,6 +658,8 @@ fn search(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i64) -> i
     with (Navigation = routes) { search_cached(s, depth, root, low, high) }
 }
 fn search_cached(_ s: State, _ depth: usize, _ root: i64, _ low: i64, _ high: i64) -> i64 uses (stats: mut Search, Navigation) {
+    // Depth counts actions, not orders. A two-order move advances the side in
+    // apply(); the actual resulting side controls maximizing/minimizing here.
     stats.nodes += 1
     if depth == 0 || s.result != 0 || s.decision_pending { return evaluate_cached(s, root) }
     let list = ranked(s, root)

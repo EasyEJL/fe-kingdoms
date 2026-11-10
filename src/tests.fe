@@ -357,7 +357,8 @@ fn role_power_depends_on_target_and_infantry_combat_is_unchanged() {
     s.fort[7] = 2
     assert(attack_power(s, 7, mixed) == 10)
     assert(attack_power(s, 14, mixed) == 10)
-    assert(attack_power(s, 6, mixed) == 12)
+    // The forest village is no longer open ground: siege helps, cavalry does not.
+    assert(attack_power(s, 6, mixed) == 10)
     for troops in 2 .. 13 {
         let count: i64 = troops.downcast_unchecked()
         let infantry = Army { infantry: count, cavalry: 0, siege: 0 }
@@ -445,7 +446,12 @@ fn full_frontline_can_train_and_breach_the_fortified_pass() {
         s = apply(s, train)
         s = apply(s, pass())
         s = apply(s, train)
+        // The siege assault needs both orders. End this preparation turn and
+        // the opponent's quiet fixture turn rather than applying an illegal move.
+        s = apply(s, pass())
+        s = apply(s, pass())
         let assault = Action { kind: 1, from: 6, to: 7, amount: 11 }
+        assert(is_legal(s, assault) && order_cost(s, assault) == 2)
         assert(attack_power(s, 7, detachment(army_at(s, 6), 11)) == 17)
         let attack = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
         assert(same_action(attack, assault))
@@ -656,7 +662,7 @@ fn bridge_cut_position() -> State {
     s.troops[11] = 8
     s.fort[11] = 2
     s.settlement[11] = 2
-    s.orders = 1
+    s.orders = 2
     s.gold = [0, 0, 0]
     s.food = [0, 40, 40]
     s
@@ -735,4 +741,135 @@ fn navigation_cache_is_scoped_to_one_decision() {
             if index == 3 { assert(same_action(action, first) && stats.nodes == first_nodes) }
         }
     }
+}
+
+// V7 FORESTS AND DETACHMENT-SPECIFIC ORDER COSTS
+#[test]
+fn forests_are_symmetric_and_infantry_protection_is_small() {
+    for scenario in 0 .. 3 {
+        var s = initial(scenario)
+        var count: i64 = 0
+        for i in 0 .. tile_count(s) {
+            if terrain(s, i) == 10 {
+                count += 1
+                assert(passable(s, i) && terrain(s, tile_count(s) - 1 - i) == 10)
+                assert(defense(s, i) == s.troops[i] + s.fort[i] + 1)
+                s.troops[i] = 5
+                s.cavalry[i] = 5
+                assert(defense(s, i) == 5 + s.fort[i])
+                s.cavalry[i] = 4
+                assert(defense(s, i) == 6 + s.fort[i])
+                s.cavalry[i] = 0
+                assert(defense(s, i) == 6 + s.fort[i])
+                assert(attack_power(s, i, Army { infantry: 0, cavalry: 3, siege: 0 }) == 3)
+            }
+        }
+        assert(count == 2)
+        assert(attack_power(s, 1, Army { infantry: 0, cavalry: 3, siege: 0 }) == 6)
+    }
+}
+#[test]
+fn one_order_can_move_infantry_while_leaving_specialists_behind() {
+    for role in 1 .. 3 {
+        var s = initial(0)
+        s.orders = 1
+        s.troops[5] = 5
+        if role == 1 { s.cavalry[5] = 1 } else { s.siege[5] = 1 }
+        let half = Action { kind: 1, from: 5, to: 6, amount: 2 }
+        let full = Action { kind: 1, from: 5, to: 6, amount: 4 }
+        assert(same_army(detachment(army_at(s, 5), 2), Army { infantry: 2, cavalry: 0, siege: 0 }))
+        assert(order_cost(s, half) == 1 && is_legal(s, half))
+        assert(order_cost(s, full) == 2 && !is_legal(s, full))
+        // The neutral forest has one infantry and one protection: a tie repels.
+        let after = apply(s, half)
+        assert(after.owner[6] == 0 && after.side == 2 && after.orders == 2)
+        assert(after.cavalry[5] == s.cavalry[5] && after.siege[5] == s.siege[5])
+        s.orders = 2
+        assert(is_legal(s, full))
+        let capture = apply(s, full)
+        assert(capture.owner[6] == 1 && capture.side == 2 && capture.orders == 2)
+        check_bounds(capture)
+    }
+}
+#[test]
+fn every_detachment_pays_max_role_cost_and_friendly_moves_conserve_roles() {
+    for total in 2 .. 13 {
+        for cavalry in 0 .. total + 1 {
+            for siege in 0 .. total - cavalry + 1 {
+                var s = initial(0)
+                s.owner[6] = 1
+                s.troops[5] = total.downcast_unchecked()
+                s.cavalry[5] = cavalry.downcast_unchecked()
+                s.siege[5] = siege.downcast_unchecked()
+                let original = combine_armies(army_at(s, 5), army_at(s, 6))
+                for amount in 1 .. total {
+                    let moving = detachment(army_at(s, 5), amount.downcast_unchecked())
+                    let expected: i64 = if moving.cavalry > 0 || moving.siege > 0 { 2 } else { 1 }
+                    assert(move_order_cost(s, 6, moving) == expected)
+                    assert(move_order_cost(s, 1, moving) == if moving.siege > 0 { 2 } else { 1 })
+                    if amount == total - 1 || amount == total / 2 {
+                        let action = Action { kind: 1, from: 5, to: 6, amount: amount.downcast_unchecked() }
+                        assert(is_legal(s, action) && order_cost(s, action) == expected)
+                        let after = apply(s, action)
+                        assert(same_army(combine_armies(army_at(after, 5), army_at(after, 6)), original))
+                        assert(after.side == if expected == 2 { 2 } else { 1 })
+                        assert(after.orders == if expected == 2 { 2 } else { 1 })
+                        assert(after.gold[1] == s.gold[1] && after.food[1] == s.food[1])
+                        check_bounds(after)
+                        s.orders = 1
+                        assert(is_legal(s, action) == (expected == 1))
+                        s.orders = 2
+                    }
+                }
+            }
+        }
+    }
+}
+#[test]
+fn forest_opening_replays_and_old_small_attack_is_a_tie() {
+    let opening = [Action { kind: 1, from: 0, to: 1, amount: 5 },
+        Action { kind: 1, from: 1, to: 6, amount: 7 }]
+    var s = initial(0)
+    var replay = initial(0)
+    for i in 0 .. 2 {
+        assert(is_legal(s, opening[i]) && order_cost(s, opening[i]) == 1)
+        s = apply(s, opening[i])
+        replay = apply(replay, opening[i])
+        check_bounds(s)
+    }
+    assert(s.owner[6] == 1 && s.troops[6] == 5 && s.side == 2)
+    assert(same_campaign(s, replay))
+    var old = initial(0)
+    old = apply(old, Action { kind: 2, from: 5, to: 5, amount: 2 })
+    let attack = Action { kind: 1, from: 5, to: 6, amount: 2 }
+    assert(is_legal(old, attack))
+    assert(attack_power(old, 6, detachment(army_at(old, 5), 2)) == defense(old, 6))
+    assert(apply(old, attack).owner[6] == 0)
+}
+#[test]
+fn both_policies_respect_two_order_siege_and_one_order_limits() {
+    var s = initial(0)
+    s.owner[13] = 1
+    s.troops[13] = 12
+    s.siege[13] = 2
+    s.troops[14] = 12
+    s.fort[14] = 2
+    s.orders = 1
+    let assault = Action { kind: 1, from: 13, to: 14, amount: 11 }
+    assert(order_cost(s, assault) == 2 && !is_legal(s, assault))
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let chosen = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        assert(is_legal(s, chosen) && order_cost(s, chosen) <= 1)
+        assert(!same_action(chosen, assault))
+    }
+    s.orders = 2
+    for difficulty in 0 .. 2 {
+        var stats = Search { nodes: 0 }
+        let chosen = with (Search = stats) { choose(s, difficulty.downcast_unchecked()) }
+        assert(is_legal(s, chosen) && order_cost(s, chosen) == 2)
+        assert(apply(s, chosen).result == 1)
+    }
+    assert(order_cost(s, pass()) == 2)
+    assert(order_cost(s, extend_campaign()) == 0 && order_cost(s, accept_draw()) == 0)
 }

@@ -1,6 +1,6 @@
 # A guided tour of the Fe engine
 
-This guide describes the **version 6 river-campaign engine**. Start with the ideas below, then follow the named functions. You do not need to understand every Fe language feature before understanding the game. Read the decision records alongside this guide for why the rules evolved; this is a tour of the current implementation, not a claim that balance work is finished.
+This guide describes the **unreleased version 7 frontier engine**. Start with the ideas below, then follow the named functions. You do not need to understand every Fe language feature before understanding the game. Read the decision records alongside this guide for why the rules evolved; this is a tour of the current implementation, not a claim that balance work is finished.
 
 ## 1. The useful mental model
 
@@ -70,7 +70,7 @@ Specialists require a supplied town (settlement level 2). Recruiting cavalry cos
 
 `detachment` decides which troops move. First reserve one garrison, preferring infantry, then cavalry, then siege. From the remaining mobile pool, assign the requested number proportionally: integer division gives initial counts, then largest remainders receive the unassigned places. Ties prefer infantry, cavalry, siege in that order. Moving half a mixed army therefore preserves real unit types; it does not turn the moving troops into whichever role is convenient.
 
-`attack_power` starts with the number of attackers. Cavalry adds strength on plains and farms. Siege adds strength against a fortified tile, settlement or capital. Defense still combines defender count, fort level and hill/bridge protection. A strictly stronger attack captures; a tie does not.
+`attack_power` starts with the number of attackers. Cavalry adds strength on plains and farms. Siege adds strength against a fortified tile, settlement or capital. Defense combines defender count, fort level and hill/bridge protection, plus one forest cover when at least one defending infantry remains. A strictly stronger attack captures; a tie does not.
 
 `capture_losses` converts defense into casualties proportional to attacking headcount and power, rounded up and capped to leave a survivor after a successful capture. `lose_troops` removes infantry first, then cavalry, then siege. The same casualty order serves combat, isolation and food shortages. A repelled detachment is lost; the defenders suffer damage but retain at least one troop.
 
@@ -78,7 +78,7 @@ A conceptual forecast to follow in code: send a mixed infantry/cavalry detachmen
 
 ## 6. One order, then the economy
 
-Read `apply` in order. It deducts the order and costs, performs the action, checks capital capture, and changes sides when orders run out. Passing forfeits the remaining orders. A terminal position returns before another turn begins.
+Read `apply` in order. It deducts the Fe-computed order cost and resources, performs the action, checks capital capture, and changes sides when orders run out. Passing forfeits the remaining orders. A terminal position returns before another turn begins.
 
 Then follow:
 
@@ -110,7 +110,7 @@ Beam limits keep work bounded but do not guarantee optimal play. Stable ordering
 
 The parser in `src/native.fe` rejects malformed numbers, overflow, extra fields, inputs over 131,072 bytes and traces over 2,048 actions. Version 6 retains campaign-decision state and limits, adding supply counts and changed fixed-river scenarios. Browser modes are 1 (replay only) and 0 (computer response); headless modes 2 and 3 support full self-play and one Fe-selected action.
 
-The host routes versions 1, 2, 3, 4 and 5 to frozen read-only replay executables, so old actions are not silently given new movement or economy semantics.
+The host routes versions 1 through 6 to frozen read-only replay executables, so old actions are not silently given new movement or economy semantics.
 
 `scripts/build.py` verifies the compiler hash, concatenates unchanged Fe source and calls `fe build --backend native`. It does not translate host-language game logic. `scripts/test_fe.py` combines the engine and `src/tests.fe` and runs native Fe tests. Broader verification adds transport, replay, full matches and UI units.
 
@@ -143,18 +143,18 @@ $image = 'sha256:32e644f1599ac63427a9e545d643ad75adee6f14328c4b7d1be01e3bf728391
 ### 1. Find the initial state
 
 ```powershell
-'6 1 0 0 0' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
+'7 1 0 0 0' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
 ```
 
-The header means version 6, replay-only, Easy, small scenario, zero actions. Find tag 1 for turn/resources, tag 6 for map metadata, tag 7 for economy, tag 8 for supply counts and tag 3 for legal actions. Compare with `initial(0)` and `economy`.
+The header means version 7, replay-only, Easy, small scenario, zero actions. Find tag 1 for turn/resources, tag 6 for map metadata, tag 7 for economy, tag 8 for supply counts and tag 3 for legal actions. Compare with `initial(0)` and `economy`.
 
 ### 2. Separate your orders from Red's response
 
 ```powershell
-'6 1 0 0 2  2 5 5 2  1 5 6 2' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
+'7 1 0 0 2  1 0 1 5  1 1 6 7' | docker run --rm -i --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
 ```
 
-Tile 5 is A2 on the small map. This recruits there, then sends two troops to B2, spending both orders. Tag 1 shows Red to move; the accepted trace still has exactly two actions. Change only the header's second field from 1 to 0 and rerun: Fe adds Red's response. Follow the relevant branches in `run` and `apply`.
+Tiles 0, 1 and 6 are A1, B1 and B2 on the small map. This joins five capital troops into B1, then sends seven infantry into the forest village B2, spending both orders. Tag 1 shows Red to move; the accepted trace still has exactly two actions. Change only the header's second field from 1 to 0 and rerun: Fe adds Red's response. Follow the relevant branches in `run` and `apply`.
 
 ### 3. Predict an assertion, then run it
 
@@ -181,3 +181,8 @@ The native trace is bounded to 2,048 actions. Reaching capacity suppresses legal
 
 `SupplyCount` and `supply_count` count owned passable holdings connected to the capital or cut off. Native output emits current counts in tag 8, then calls the same function on each actual `apply` result for tag-5 previews. The browser labels the counts and differences. It does not infer graph connectivity, predict an attack itself or mistake every ownership increase for reconnection.
 For focused v6 examples, read `fixed_rivers_bridges_and_cached_capital_routes_match_oracle`, `both_policies_capture_bridge_and_cut_enemy_supply`, `supply_counts_distinguish_capture_cut_and_reconnection` and `navigation_cache_is_scoped_to_one_decision`. These are constructed tactical/invariant fixtures, not human playtests. The HTTP suite separately compares every preview along a real complete winning replay with the resulting state.
+## V7 stage 1: meaningful movement costs
+
+Read move_order_cost and order_cost after detachment. The actual moving composition determines cost: any siege spends both orders, otherwise cavalry entering forest spends both, otherwise one. This means a half move that leaves the specialist home can remain cheap. legal filters unaffordable order costs; apply deducts exactly the same value. Native forecasts expose orderCost and total tile defense rather than asking JavaScript to reproduce the rule.
+
+Hard still searches four action plies, not four order points. Expensive moves change which turns fit inside that horizon. Tests and playtesting must evaluate that behavior rather than treating the depth number as unchanged strength.

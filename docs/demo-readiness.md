@@ -18,7 +18,7 @@ See [the guided engine tour](engine-guide.md), [protocol](protocol.md) and [ADRs
 
 ## A reproducible local demonstration
 
-Use the existing pinned Docker image recorded in `toolchain.lock.json` and local Node. No toolchain download is required. Compiler identity is Fe 26.5.0, commit 3dab95f; build checks its SHA-256 before compiling with the native backend.
+This frozen-v6 example intentionally retains the earlier opening; it is not a v7 tutorial. For current v7, use the README opening and inspect the emitted order costs. Use the existing pinned Docker image recorded in `toolchain.lock.json` and local Node. No toolchain download is required. Compiler identity is Fe 26.5.0, commit 3dab95f; build checks its SHA-256 before compiling with the native backend.
 
 From the chosen isolated checkout:
 
@@ -28,13 +28,13 @@ From the chosen isolated checkout:
 
 Require `evidence/verification.json` to say `passed`. Check source hashes and logs; an earlier successful run does not validate later changes. Do not present bounded self-play budget stops as completed matches or draws.
 
-The following native interaction does not access browser checkpoints or any running server:
+The following frozen-v6 native interaction does not access browser checkpoints or any running server:
 
 ```powershell
 $p = (Get-Location).Path
 $image = (Get-Content toolchain.lock.json | ConvertFrom-Json).measured_image_id
-'6 1 0 0 2  2 5 5 2  1 5 6 2' | docker run --rm -i --pull never --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
-'6 0 0 0 2  2 5 5 2  1 5 6 2' | docker run --rm -i --pull never --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom
+'6 1 0 0 2  2 5 5 2  1 5 6 2' | docker run --rm -i --pull never --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom-v6
+'6 0 0 0 2  2 5 5 2  1 5 6 2' | docker run --rm -i --pull never --network none -v "${p}:/work:ro" -w /work $image ./out/kingdom-v6
 ```
 
 Both inputs recruit at A2 and move two infantry to B2 on Small. Replay-only mode 1 returns exactly the two human orders, side Red, two Red orders available, turn 2. Mode 0 returns genuine Fe Red actions `[1,13,8,2]` and `[2,8,8,2]`, then side Blue with two orders on turn 3. Read tag 1 for state, tag 3 for legal actions, tag 4 for accepted actions, tag 5 for forecasts and tag 8 for supply. These exact results were checked against unchanged v6 in the isolated validation worktree.

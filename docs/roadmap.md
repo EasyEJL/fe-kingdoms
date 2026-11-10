@@ -23,8 +23,8 @@ Human feedback should guide the next mechanics slice and eventual difficulty cal
 
 Candidate later mechanics, not accepted implementations:
 
-- Buildable/destroyable bridges and forests harvested for construction materials. These would change both kingdoms' movement/supply and invalidate the current fixed-route cache assumption.
-- Town specialties and distinct unit movement when they create useful decisions without excessive bookkeeping.
+- Bridge destruction and forests harvested for construction materials. Bounded permanent construction is authorized for the v7 development stages below, but destruction and harvesting are not yet chosen.
+- Further town or troop systems only after the authorized bounded v7 specialties/movement slice is evaluated.
 - Roads or further economic systems only where playtesting supports them.
 
 Prefer small shared terrain/unit definitions when repeated rules justify them. Do not build a generic game framework. Compare a different order budget or planning phase only if evidence supports that change; the current two-order rule remains.
@@ -32,3 +32,7 @@ Prefer small shared terrain/unit definitions when repeated rules justify them. D
 ## Boundaries
 
 Keep this project separate from Dragonstales, the preserved transition prototype and any Unreal exploration. No remote Git, publishing, deployment, package registration or contest submission is authorized by these local milestones. Preserve live browser matches and versioned replays. Commit coherent local changes with their decisions and actual verification evidence. Stop and report if reliable agent allowance reaches 25% remaining or cannot be measured.
+
+## Authorized frontier development (unreleased v7)
+
+Forest and actual-detachment movement costs are the first implementation stage. Town specialties (granary/arsenal), bounded permanent shared crossing construction and truthful Fe opponent evaluation/strategy feedback are authorized next stages, not completed features yet. Use existing gold/food and small factual profiles, not a generic framework. Destructible bridges, forest harvesting, roads and an Expert tier remain future candidates. Expert might use measured iterative deepening, tactical extensions and caching after mechanics settle; no guaranteed wins are implied.

@@ -1,8 +1,8 @@
-"""Real v6 protocol boundaries, replay capacity, and immutable v4 evidence."""
+"""Current protocol boundaries, replay capacity, and immutable v4 evidence."""
 import http.client,json,pathlib,subprocess,sys,threading,unittest
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from server import game,decode,request_text,Handler,ThreadingHTTPServer,MAX_BODY
+from server import CURRENT_VERSION, game,decode,request_text,Handler,ThreadingHTTPServer,MAX_BODY
 
 EXTEND=[9,0,0,0]
 DRAW=[10,0,0,0]
@@ -11,7 +11,7 @@ def cycle(scenario):
     cap=(15,35,45)[scenario]-1
     return [[1,0,1,3],[1,1,0,3],[1,cap,cap-1,3],[1,cap-1,cap,3]]
 
-def run(actions,scenario=0,mode=1,version=6):
+def run(actions,scenario=0,mode=1,version=CURRENT_VERSION):
     return game(dict(version=version,scenario=scenario,mode=mode,difficulty=0,actions=actions))
 
 class CampaignTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class CampaignTests(unittest.TestCase):
             self.assertEqual(before['state']['completedRounds'],limit-1)
             self.assertEqual(before['state']['decisionPending'],0)
             pending=run(trace,scenario)
-            self.assertEqual(pending['version'],6)
+            self.assertEqual(pending['version'],CURRENT_VERSION)
             self.assertEqual(pending['map']['baseRoundLimit'],limit)
             self.assertEqual(pending['map']['extensionRounds'],20)
             self.assertEqual(pending['map']['traceCapacity'],2048)
@@ -33,7 +33,7 @@ class CampaignTests(unittest.TestCase):
             self.assertEqual(automatic['actions'],trace)
             self.assertEqual(automatic['state']['result'],0)
             for mode in (2,3):
-                wire=request_text(dict(version=6,scenario=scenario,mode=1,difficulty=0,actions=trace)).replace('6 1 ',f'6 {mode} ',1)
+                wire=request_text(dict(version=CURRENT_VERSION,scenario=scenario,mode=1,difficulty=0,actions=trace)).replace(f'{CURRENT_VERSION} 1 ',f'{CURRENT_VERSION} {mode} ',1)
                 native=subprocess.run([str(ROOT/'out/kingdom')],input=wire,text=True,capture_output=True,check=True,timeout=30)
                 self.assertEqual(decode(native.stdout)['actions'],trace)
             for action,forecast in zip(pending['legal'],pending['previews']):
@@ -87,13 +87,13 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(before['state']['traceCapacityReached'],0)
         self.assertIn(trace[-1],before['legal'])
         with self.assertRaises(ValueError):run(trace+[[0,0,0,0]])
-        self.assertEqual(request_text(dict(version=6,mode=1,difficulty=0,actions=trace)).splitlines()[0],'6 1 0 0 2048')
+        self.assertEqual(request_text(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=trace)).splitlines()[0],f'{CURRENT_VERSION} 1 0 0 2048')
         # A body above the old 32KiB ceiling still transports a real long replay.
         server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         connection=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=30)
         try:
-            body=json.dumps(dict(version=6,mode=1,difficulty=0,actions=trace),indent=2)
+            body=json.dumps(dict(version=CURRENT_VERSION,mode=1,difficulty=0,actions=trace),indent=2)
             self.assertGreater(len(body),32768)
             self.assertLess(len(body),MAX_BODY)
             connection.request('POST','/api/game',body,{'Content-Type':'application/json'})

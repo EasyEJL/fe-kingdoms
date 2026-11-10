@@ -1,19 +1,19 @@
 # Fe Kingdoms
 
-A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current source milestone is **rules version 6: fixed rivers, bridges and supply previews**. The browser and Python adapter only display and transport Fe results.
+A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current source milestone is **unreleased rules version 7: frontier development**. The browser and Python adapter only display and transport Fe results.
 
-## Isolated campaign preview
+## Isolated frontier development
 
-The campaign-expansion branch is developed in `C:\Users\Eric\dev\fe-kingdoms-campaign` with its separate preview reserved at http://localhost:8767. It does not replace the active game on ports 8765 and 8766. Run `scripts/preview.ps1` from this checkout to start or locate that separate preview. Do not use the ordinary launcher to switch the live game during a match.
+This branch is work in progress; do not retain intermediate v7 saves as a stable release format. The frontier-expansion branch is developed in `C:\Users\Eric\dev\fe-kingdoms-frontiers` with its separate preview reserved at http://localhost:8768. It does not replace the active game on ports 8765, 8766 and 8767. Run `scripts/preview.ps1` from this checkout to start or locate that separate preview. Do not use the ordinary launcher to switch the live game during a match.
 
-Browser saves are separate for each port. To copy a current game into the preview, use **Save replay** in the original game and **Load replay** in the preview. The original checkpoint remains untouched. New games use v6. Existing v4/v5 matches remain exact read-only replays; they are never silently converted.
+Browser saves are separate for each port. To copy a current game into the preview, use **Save replay** in the original game and **Load replay** in the preview. The original checkpoint remains untouched. New games use v7. Existing v1-v6 matches remain exact read-only replays; they are never silently converted.
 
 ## Play and verify
 
 From PowerShell, with Docker Desktop running and the existing pinned toolchain image available:
 
 ```powershell
-Set-Location C:\Users\Eric\dev\fe-kingdoms-campaign
+Set-Location C:\Users\Eric\dev\fe-kingdoms-frontiers
 .\scripts\preview.ps1
 ```
 
@@ -25,9 +25,9 @@ Run all automated checks with `scripts/verify.ps1`. It uses local Node for UI un
 
 You are Blue. You get **two orders TOTAL across your kingdom**, not per territory. Selecting a hex is free. Owned territories are listed as expandable action cards, with only one open at a time.
 
-Each human order is shown separately. After both orders, click **Run computer turn** to let Red act. End my turn forfeits unused orders and asks for confirmation. Fe forecasts show costs, survivors, captures and losing attacks before you commit.
+Each human order is shown separately. Most actions cost one order. A moving detachment containing siege costs both orders; cavalry entering forest also costs both. Fe displays the cost before you act. After your orders run out, click **Run computer turn** to let Red act. End my turn forfeits unused orders and asks for confirmation. Fe forecasts show costs, survivors, captures and losing attacks before you commit.
 
-On the small map, try selecting A2, recruiting two troops, then moving two from A2 to the neutral village B2. Those are the two orders. Capture Red's capital to win while keeping your own safe.
+On the small map, move five troops from A1 to B1, then seven from B1 to the forest village B2. Those are two one-order moves. Capture Red's capital to win while keeping your own safe.
 
 ## Campaign rules
 
@@ -37,16 +37,16 @@ On the small map, try selecting A2, recruiting two troops, then moving two from 
 - Build a village for six gold; upgrade to a town for eight. Both use one order. Supplied villages/towns produce one/two gold each turn. Fortifying costs two gold, with a maximum of two levels.
 - Supply follows connected owned hexes to the capital. At the incoming turn, gain base two gold plus connected settlement levels, and base three food plus two per connected farm. Each connected army pays ceil((troops minus one)/3) food; lone garrisons are free. Storage is capped before upkeep.
 - Disconnected stacks lose one mobile troop and do not pay global food upkeep. Food shortages remove mobile troops from the largest armies deterministically, never eliminating lone garrisons. The display uses Fe's exact projected stock and shortage forecast for an unchanged board.
-- Infantry attacks/defends at one. Cavalry adds one attack power on plain/farm targets. Siege adds two attack power against forts, settlements or capitals. All units defend at one; forts and hills/bridges add defense. Attack power must strictly exceed defense. Fe shows exact casualties and remaining composition before each order.
+- Infantry attacks/defends at one. Cavalry adds one attack power on plain/farm targets. Siege adds two attack power against forts, settlements or capitals. All units defend at one; forts and hills/bridges add defense. A forest adds one defense if its defenders include infantry. Cavalry gets no open-ground bonus in forests. Attack power must strictly exceed defense. Fe shows exact casualties and remaining composition before each order.
 - Supplied towns recruit one cavalry for four gold/two food or one siege for five gold/three food. They can also train one existing infantry into that specialist at the same cost, keeping total units unchanged. This explicit paid training works at the stack cap.
-- Moving detachments are proportional after reserving a garrison. Casualties remove infantry first, then cavalry, then siege. The rules remain deterministic; no random combat or hidden bonuses.
+- Moving detachments are proportional after reserving a garrison. Movement cost uses the actual detachment: any siege costs two orders anywhere, otherwise cavalry entering forest costs two, otherwise one. A costly move is unavailable with only one order left. Casualties remove infantry first, then cavalry, then siege. The rules remain deterministic; no random combat or hidden bonuses.
 - Capture the enemy capital for immediate victory. Four consecutive pass actions draw the match. Small/medium/large campaigns pause after 60/120/180 full rounds. Choose Extend 20 rounds or Accept draw; extension begins the deferred Blue turn exactly once.
 - Order forecasts show each kingdom's connected and cut-off territory before and after the order, using Fe's actual resulting state. Capture can increase connected count without reconnecting an existing holding.
 - Easy uses one-ply greedy evaluation; Hard uses bounded four-ply beam alpha-beta search. Their rules and resources are identical, without hidden bonuses.
 
 ## Saves and compatibility
 
-Save replay exports the accepted action sequence, version, scenario and difficulty. Up to 2,048 actions are supported, including campaign decisions. At capacity, play pauses for export without declaring a draw; export does not itself increase this version's capacity. Fe validates every recorded action when loading. Version-1 square saves, version-2 basic-hex saves, version-3 infantry-campaign saves and version-4 mixed-army saves and version-5 continuation saves load through frozen engines **read-only**. They are never silently migrated. Each rules version has a separate browser checkpoint; loading an old replay does not replace the current one. Export replays to keep multiple games.
+Save replay exports the accepted action sequence, version, scenario and difficulty. Up to 2,048 actions are supported, including campaign decisions. At capacity, play pauses for export without declaring a draw; export does not itself increase this version's capacity. Fe validates every recorded action when loading. Version-1 square saves, version-2 basic-hex saves, version-3 infantry-campaign saves and version-4 mixed-army saves, version-5 continuation saves and version-6 river saves load through frozen engines **read-only**. They are never silently migrated. Each rules version has a separate browser checkpoint; loading an old replay does not replace the current one. Export replays to keep multiple games.
 
 ## Current verification and balance limits
 

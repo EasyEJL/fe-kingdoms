@@ -27,8 +27,8 @@ def sha256(path):
 def compile_oracle():
     lock = json.loads((ROOT / 'toolchain.lock.json').read_text())
     assert sha256(pathlib.Path('/usr/local/bin/fe')) == lock['compiler_sha256']
-    engine = (ROOT / 'src/engine.fe').read_text(encoding='utf-8-sig')
-    native = (ROOT / 'src/native.fe').read_text(encoding='utf-8-sig')
+    engine = (ROOT / 'legacy/v6/engine.fe').read_text(encoding='utf-8-sig')
+    native = (ROOT / 'legacy/v6/native.fe').read_text(encoding='utf-8-sig')
     # Reuse the existing bounded numeric parser/output helpers, without the
     # production run/main functions. No engine/native source is rewritten.
     marker = 'fn run() -> i32'
@@ -49,7 +49,7 @@ def wire_actions(actions):
 
 def native(scenario, actions, mode=1, difficulty=0):
     wire = f'6 {mode} {difficulty} {scenario} {len(actions)}\n' + wire_actions(actions)
-    run = subprocess.run([str(ROOT / 'out/kingdom')], input=wire, text=True,
+    run = subprocess.run([str(ROOT / 'out/kingdom-v6')], input=wire, text=True,
                          capture_output=True, check=True, timeout=30)
     return decode(run.stdout)
 
@@ -182,7 +182,7 @@ def main():
         for name, prefix in CASES:
             report['cases'].append(audit(name, prefix))
         report['status'] = 'passed'
-        paths = [ROOT / p for p in ('src/engine.fe', 'src/native.fe',
+        paths = [ROOT / p for p in ('legacy/v6/engine.fe', 'legacy/v6/native.fe',
                  'tests/tactics.fe', 'scripts/test_tactics.py', 'toolchain.lock.json')]
         paths += [ROOT / f'docs/playtests/v6-sol-{name}.json' for name, _ in CASES]
         report['sha256'] = {str(p.relative_to(ROOT)): sha256(p) for p in paths}

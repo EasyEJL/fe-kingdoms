@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parent
 MAX_BODY = 262144
-CURRENT_VERSION = 6
+CURRENT_VERSION = 7
 MAX_ACTIONS = 2048
 
 
@@ -16,7 +16,7 @@ def request_text(data):
     if not isinstance(data, dict) or set(data) - {'version','scenario','mode','difficulty','actions'}:
         raise ValueError('Expected version, scenario, mode, difficulty, and actions only.')
     version, scenario = data.get('version'), data.get('scenario',0)
-    if type(version) is not int or version not in (1,2,3,4,5,6):
+    if type(version) is not int or version not in (1,2,3,4,5,6,7):
         raise ValueError('Missing or unsupported replay version. Refresh the page for the hex game.')
     if type(scenario) is not int or not 0<=scenario<=2 or (version<3 and scenario!=0):
         raise ValueError('Unsupported map scenario.')
@@ -36,36 +36,41 @@ def request_text(data):
 
 def decode(text):
     data = {'tiles': [], 'legal': [], 'actions': [], 'previews': [], 'economy': [], 'supply': []}
+    count = None
     for line in text.splitlines():
-        fields = [int(n) for n in line.split()]
+        try:
+            fields = [int(n) for n in line.split()]
+        except ValueError as error:
+            raise RuntimeError('Unexpected native engine output.') from error
         if not fields:
             continue
         tag, values = fields[0], fields[1:]
-        if tag == 0 and len(values) == 3 and 'version' not in data:
+        version = data.get('version', 0)
+        if tag == 0 and len(values) == 3 and 'version' not in data and values[0] in range(1, CURRENT_VERSION + 1):
             data['version'], data['difficulty'], count = values
-        elif tag == 1 and len(values) in (13,17) and 'state' not in data:
+        elif tag == 1 and version and len(values) == (17 if version >= 5 else 13) and 'state' not in data:
             data['state'] = dict(zip(('side', 'orders', 'turn', 'result', 'gold1', 'gold2', 'quiet', 'lastKind', 'lastFrom', 'lastTo', 'lastAmount', 'nodes', 'depth', 'completedRounds', 'roundLimit', 'decisionPending', 'traceCapacityReached'), values))
-        elif tag == 2 and len(values) in (6,8,11,14):
-            data['tiles'].append(dict(zip(('index', 'owner', 'troops', 'fort', 'supplied', 'terrain','q','r','settlement','passable','upkeep','infantry','cavalry','siege'), values)))
-        elif tag == 6 and len(values) in (9,11) and 'map' not in data:
+        elif tag == 2 and len(values) == {1:6,2:8,3:11,4:14,5:14,6:14,7:18}.get(version):
+            data['tiles'].append(dict(zip(('index', 'owner', 'troops', 'fort', 'supplied', 'terrain','q','r','settlement','passable','upkeep','infantry','cavalry','siege','defense','specialty','crossingSite','constructedBridge'), values)))
+        elif tag == 6 and version >= 2 and len(values) == (11 if version >= 5 else 9) and 'map' not in data:
             limit_key = 'baseRoundLimit' if data.get('version',0) >= 5 else 'maxTurns'
             data['map']=dict(zip(('width','height','count','topology','scenario','blueCapital','redCapital','orderBudget',limit_key,'extensionRounds','traceCapacity'),values))
-        elif tag == 7 and len(values)==9 and values[0]==len(data['economy'])+1:
+        elif tag == 7 and version >= 3 and len(values)==9 and values[0]==len(data['economy'])+1:
             data['economy'].append(dict(zip(('side','food','goldIncome','foodProduction','foodUpkeep','foodNet','disconnectedTiles','shortageLossesNextTurn','projectedFood'),values)))
-        elif tag == 8 and data.get('version') == 6 and len(values)==3 and values[0]==len(data['supply'])+1:
+        elif tag == 8 and version >= 6 and len(values)==3 and values[0]==len(data['supply'])+1:
             data['supply'].append(dict(zip(('side','connectedOwned','cutOffOwned'),values)))
-        elif tag == 3 and len(values) == 4:
+        elif tag == 3 and version and len(values) == 4:
             data['legal'].append(values)
-        elif tag == 5 and len(values) in (10,14,24,28) and values[0] == len(data['previews']):
-            data['previews'].append(dict(zip(('index','outcome','cost','sourceTroops','targetTroops','targetOwner','nextSide','nextOrders','result','defense','foodCost','settlementAfter','food1After','food2After','movingInfantry','movingCavalry','movingSiege','attackPower','sourceInfantry','sourceCavalry','sourceSiege','targetInfantry','targetCavalry','targetSiege','blueConnectedAfter','blueCutOffAfter','redConnectedAfter','redCutOffAfter'),values)))
-        elif tag == 4 and len(values) == 5 and values[0] == len(data['actions']):
+        elif tag == 5 and len(values) == {1:10,2:10,3:14,4:24,5:24,6:28,7:32}.get(version) and values[0] == len(data['previews']):
+            data['previews'].append(dict(zip(('index','outcome','cost','sourceTroops','targetTroops','targetOwner','nextSide','nextOrders','result','defense','foodCost','settlementAfter','food1After','food2After','movingInfantry','movingCavalry','movingSiege','attackPower','sourceInfantry','sourceCavalry','sourceSiege','targetInfantry','targetCavalry','targetSiege','blueConnectedAfter','blueCutOffAfter','redConnectedAfter','redCutOffAfter','orderCost','targetSpecialty','targetTerrain','targetPassable'),values)))
+        elif tag == 4 and version and len(values) == 5 and values[0] == len(data['actions']):
             data['actions'].append(values[1:])
         else:
             raise RuntimeError('Unexpected native engine output.')
     if data.get('version')==1:
         data['map']=dict(width=5,height=3,count=15,topology=0,scenario=0,blueCapital=0,redCapital=14,orderBudget=2,maxTurns=120)
         for tile in data['tiles']: tile.update(q=tile['index']%5,r=tile['index']//5)
-    if data.get('version') not in (1,2,3,4,5,6) or (data.get('version',0) >= 5 and ('traceCapacityReached' not in data.get('state',{}) or 'traceCapacity' not in data.get('map',{}))) or (data.get('version') == 6 and (len(data['supply'])!=2 or any('redCutOffAfter' not in p for p in data['previews']))) or 'state' not in data or 'map' not in data or not 1<=data['map']['count']<=63 or len(data['tiles'])!=data['map']['count'] or [t['index'] for t in data['tiles']]!=list(range(data['map']['count'])) or len(data['actions']) != count or len(data['previews']) != len(data['legal']) or (data.get('version',0)>=3 and len(data['economy'])!=2):
+    if data.get('version') not in (1,2,3,4,5,6,7) or (data.get('version',0) >= 5 and ('traceCapacityReached' not in data.get('state',{}) or 'traceCapacity' not in data.get('map',{}))) or (data.get('version',0) >= 6 and (len(data['supply'])!=2 or any('redCutOffAfter' not in p for p in data['previews']))) or 'state' not in data or 'map' not in data or not 1<=data['map']['count']<=63 or len(data['tiles'])!=data['map']['count'] or [t['index'] for t in data['tiles']]!=list(range(data['map']['count'])) or len(data['actions']) != count or len(data['previews']) != len(data['legal']) or (data.get('version',0)>=3 and len(data['economy'])!=2):
         raise RuntimeError('Incomplete native engine response.')
     return data
 

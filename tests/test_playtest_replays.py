@@ -81,7 +81,7 @@ class PlaytestReplayTests(unittest.TestCase):
         action = self.fixtures[name]['actions'][index]
         return before['previews'][before['legal'].index(action)]
 
-    def test_current_metadata_and_exact_prefix_arrays(self):
+    def test_frozen_v6_metadata_and_exact_prefix_arrays(self):
         for name, responses in self.responses.items():
             expected = EXPECTED[name]
             for count, response in enumerate(responses):
@@ -161,9 +161,10 @@ class PlaytestReplayTests(unittest.TestCase):
                 digest = hashlib.sha256(json.dumps(final, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
                 self.assertEqual(digest, expected['digest'],
                                  'Complete terminal response changed: ' + json.dumps(final, sort_keys=True))
-                # Repeat the exact exported replay; terminal auto mode must also be inert.
+                # Repeat the exact frozen replay; old versions are read-only.
                 self.assertEqual(game(dict(self.fixtures[name], mode=1)), final)
-                self.assertEqual(game(dict(self.fixtures[name], mode=0)), final)
+                with self.assertRaises(ValueError):
+                    game(dict(self.fixtures[name], mode=0))
 
     def test_small_bridge_conversion_and_repulses(self):
         responses = self.responses['small']

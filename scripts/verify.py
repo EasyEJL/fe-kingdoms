@@ -18,6 +18,8 @@ for index,command in enumerate(commands):
 summary['status']='passed'
 summary['sha256']={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for directory in ('src','scripts','tests','web') for p in (ROOT/directory).glob('*') if p.is_file()}
 summary['sha256']['server.py']=hashlib.sha256((ROOT/'server.py').read_bytes()).hexdigest()
+for p in list((ROOT/'tests/fixtures').glob('*.json')) + list((ROOT/'legacy/v6').glob('*.fe')):
+    summary['sha256'][str(p.relative_to(ROOT))]=hashlib.sha256(p.read_bytes()).hexdigest()
 for name in ('small','medium'):
     fixture=f'docs/playtests/v6-sol-{name}.json'
     summary['sha256'][fixture]=hashlib.sha256((ROOT/fixture).read_bytes()).hexdigest()
