@@ -46,7 +46,7 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  await run('perform('+JSON.stringify(badAttack)+','+JSON.stringify(start.previews[3])+')');assert.equal(fetches,before);assert.match(confirmations.at(-1),/all 1 attackers lost/);
  assert.match(run('forecast([0,0,0,0],{outcome:0,result:3})'),/ends the match in a draw/i);assert.match(run('forecast([1,13,14,8],{outcome:2,result:1})'),/wins the match immediately/);
  // Loading v6 on Red still pauses. Legacy loads are read-only and preserve BOTH checkpoints.
- reply(second);await run('load('+JSON.stringify(JSON.stringify({version:7,scenario:0,difficulty:0,actions:second.actions}))+')');assert.equal(run('selected'),null);assert.equal(get('global-actions').children[0].textContent,'Run computer turn');
+ accept=true;reply(second);await run('load('+JSON.stringify(JSON.stringify({version:7,scenario:0,difficulty:0,actions:second.actions}))+')');assert.equal(run('selected'),null);assert.equal(get('global-actions').children[0].textContent,'Run computer turn');
  const hexSaved=storage.get('fe-kingdoms-v7'),legacy={...start,tiles:untypedTiles(),economy:[],version:1,map:{...start.map,topology:0},actions:[pass]};reply(legacy);await get('legacy').onclick();assert.equal(requests.at(-1).version,1);assert.equal(requests.at(-1).mode,1);assert.equal(storage.get('fe-kingdoms-v1'),legacySaved);assert.equal(storage.get('fe-kingdoms-v7'),hexSaved);assert.equal(storage.get('fe-kingdoms-v3'),campaignSaved);assert.equal(storage.get('fe-kingdoms-v2'),previousSaved);assert.match(get('turn-guide').textContent,/read.only|original square rules/i);assert.match(get('global-actions').children[0].textContent,/Read-only/);assert.equal(get('board').children[5].style.left,'0px');assert.equal(get('board').children[5].style.top,'172px');
  before=fetches;await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(fetches,before);assert.equal(run('replay().version'),1);
  // v2 is also read-only, retaining its own rules/checkpoint and the v6 save.
@@ -142,7 +142,7 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  assert.doesNotMatch(get('board').children[0].className,/recent/);assert.equal(get('global-actions').children.length,1);
  before=fetches;await run('perform([9,0,0,0],{})');assert.equal(fetches,before);
  // Loading a boundary never runs Red or resolves the decision; only Fe legal options are rendered.
- reply(boundary);await run('load('+JSON.stringify(JSON.stringify({version:7,scenario:0,difficulty:0,actions:boundary.actions}))+')');
+ accept=true;reply(boundary);await run('load('+JSON.stringify(JSON.stringify({version:7,scenario:0,difficulty:0,actions:boundary.actions}))+')');
  assert.equal(fetches,before+1);assert.equal(requests.at(-1).mode,1);assert.equal(get('global-actions').children.length,2);
  setGame({...boundary,legal:[draw],previews:[{result:3}]});assert.equal(get('global-actions').children.length,1);assert.match(get('global-actions').children[0].children[0].textContent,/Accept draw/);
  setGame(boundary);accept=true;const drawn={...boundary,state:{...boundary.state,result:3,decisionPending:0},actions:[...boundary.actions,draw],legal:[],previews:[]};reply(drawn);
@@ -339,5 +339,89 @@ const untypedTiles=()=>start.tiles.map(({infantry,cavalry,siege,...t})=>t);
  setGame(decisionResponse);run('render();render()');assert.equal(get('search').children.length,2);
  const old={...start};delete old.previews;setGame(old);run('selected=0;render()');assert.doesNotThrow(()=>run('render()'));assert.equal(run('busy'),false);
  assert.match(orderButtons(openCards()[0])[0].children[0].textContent,/Check Fe order cost/);assert.doesNotMatch(orderButtons(openCards()[0])[0].children[0].textContent,/1 order/);
- console.log('UI unit tests passed: v7 terrain/crossings/specialties, native forecasts and fresh decision feedback, explicit turns, accessible territory hierarchy/zoom, campaign/supply and isolated v1..v7 checkpoints. Mocked DOM/transport, not browser or human playtesting.');
+ // Named snapshots are explicitly saved replay copies, not new engine payload fields.
+ const slotsKey='fe-kingdoms-v7-slots-v1',checkpointKey='fe-kingdoms-v7';
+ const frozenKeys=new Map([...storage].filter(([key])=>key!==checkpointKey));
+ const slots=()=>JSON.parse(storage.get(slotsKey)).slots;
+ const campaignGame={...start,map:{...start.map,scenario:2},actions:[recruit,move]};
+ setGame(campaignGame);run('checkpoint()');get('snapshot-name').value='  Long campaign  ';
+ assert.equal(get('snapshot-save').onclick(),true);assert.equal(slots().length,1);assert.equal(slots()[0].name,'Long campaign');
+ assert.deepEqual(slots()[0].replay,{version:7,scenario:2,difficulty:0,actions:[recruit,move]});
+ assert.match(get('snapshot-status').textContent,/stays unchanged.*Resume campaign autosaves/);
+ const longSnapshot=storage.get(slotsKey);accept=false;reply(start);before=fetches;
+ // A matching saved snapshot protects the outgoing campaign, so no discard prompt is needed.
+ get('scenario').value='0';get('difficulty').value='0';const confirmsBefore=confirmations.length;
+ await get('new').onclick();assert.equal(fetches,before+1);assert.equal(confirmations.length,confirmsBefore);assert.equal(storage.get(slotsKey),longSnapshot);
+ // A different unsaved working game requires explicit discard, including terminal games.
+ setGame({...start,state:{...start.state,result:1},actions:[recruit]});run('checkpoint()');before=fetches;
+ reply(campaignGame);await get('snapshot-load').onclick();assert.equal(fetches,before);assert.equal(run('game.state.result'),1);
+ accept=true;await get('snapshot-load').onclick();assert.equal(fetches,before+1);assert.equal(requests.at(-1).mode,1);
+ assert.deepEqual(Object.keys(requests.at(-1)).sort(),['actions','difficulty','mode','scenario','version']);assert.equal(run('replay().name'),undefined);
+ assert.equal(storage.get(slotsKey),longSnapshot);assert.equal(run('replay().scenario'),2);
+ // Unsaved completed checkpoint behind a legacy view remains guarded.
+ const ended={...start,state:{...start.state,result:1},actions:[pass,recruit]};setGame(ended);run('checkpoint()');
+ const endedCheckpoint=storage.get(checkpointKey);reply(legacy);accept=false;before=fetches;
+ await get('legacy').onclick();assert.equal(fetches,before+1);assert.equal(storage.get(checkpointKey),endedCheckpoint);
+ reply(start);before=fetches;await get('new').onclick();assert.equal(fetches,before);assert.equal(storage.get(checkpointKey),endedCheckpoint);
+ assert.equal(get('snapshot-save').onclick(),false);assert.equal(storage.get(slotsKey),longSnapshot);
+ // Names, bounded collection, deliberate replacement/deletion and retained identity.
+ setGame(start);run('checkpoint()');get('snapshot-name').value='LONG CAMPAIGN';assert.equal(get('snapshot-save').onclick(),false);
+ for(const name of ['', ' '.repeat(3), 'x'.repeat(41)]){get('snapshot-name').value=name;assert.equal(get('snapshot-save').onclick(),false);}
+ for(let n=2;n<=6;n++){get('snapshot-name').value='Snapshot '+n;assert.equal(get('snapshot-save').onclick(),true);}
+ const fullSlots=storage.get(slotsKey);get('snapshot-name').value='Seventh';assert.equal(get('snapshot-save').onclick(),false);assert.equal(storage.get(slotsKey),fullSlots);
+ get('snapshot-list').value=slots()[0].id;accept=false;assert.equal(get('snapshot-replace').onclick(),false);assert.equal(get('snapshot-delete').onclick(),false);assert.equal(storage.get(slotsKey),fullSlots);
+ accept=true;assert.equal(get('snapshot-replace').onclick(),true);assert.equal(slots()[0].name,'Long campaign');assert.deepEqual(slots()[0].replay.actions,[]);
+ const selectedDelete=slots()[0].id;get('snapshot-list').value=selectedDelete;assert.equal(get('snapshot-delete').onclick(),true);assert.equal(slots().length,5);
+ assert.equal(get('snapshot-delete').onclick(),false);assert.equal(slots().length,5); // A second click cannot silently target the next entry.
+ const healthySlots=storage.get(slotsKey);
+ // Bad/unknown collections are preserved on all write attempts. A bad entry is not silently dropped.
+ const invalidCollections=['{bad',JSON.stringify({schema:2,slots:[]}),JSON.stringify({schema:1,slots:[{id:'x',name:'Broken',savedAt:'today',replay:{}}]})];
+ for(const raw of invalidCollections){storage.set(slotsKey,raw);run('renderSnapshots()');get('snapshot-name').value='Recovery';before=fetches;
+  assert.equal(get('snapshot-save').onclick(),false);assert.equal(get('snapshot-replace').onclick(),false);assert.equal(get('snapshot-delete').onclick(),false);await get('snapshot-load').onclick();assert.equal(fetches,before);assert.equal(storage.get(slotsKey),raw);assert.match(get('storage-warning').textContent,/Snapshots unavailable/);}
+ storage.set(slotsKey,healthySlots);run('renderSnapshots()');
+ const healthyFirst=slots()[0],duplicateCollection=JSON.parse(healthySlots);duplicateCollection.slots[1].name=healthyFirst.name.toUpperCase();storage.set(slotsKey,JSON.stringify(duplicateCollection));
+ assert.equal(get('snapshot-save').onclick(),false);assert.equal(storage.get(slotsKey),JSON.stringify(duplicateCollection));storage.set(slotsKey,healthySlots);run('renderSnapshots()');
+ // Persistence failures never report success or mutate stored snapshots; warnings survive requests/renders.
+ const normalSet=context.localStorage.setItem,normalGet=context.localStorage.getItem;
+ context.localStorage.setItem=(key,value)=>{if(key===slotsKey)throw Error('QuotaExceededError');return normalSet(key,value)};
+ get('snapshot-name').value='Quota test';assert.equal(get('snapshot-save').onclick(),false);assert.equal(storage.get(slotsKey),healthySlots);assert.match(get('storage-warning').textContent,/QuotaExceededError/);
+ get('snapshot-list').value=slots()[0].id;assert.equal(get('snapshot-replace').onclick(),false);assert.equal(get('snapshot-delete').onclick(),false);assert.equal(storage.get(slotsKey),healthySlots);
+ reply(start);await get('new').onclick();assert.match(get('storage-warning').textContent,/QuotaExceededError/);
+ context.localStorage.setItem=normalSet;assert.equal(get('snapshot-save').onclick(),true);assert.doesNotMatch(get('storage-warning').textContent,/QuotaExceededError/);
+ const checkpointBeforeFailure=storage.get(checkpointKey);context.localStorage.setItem=(key,value)=>{if(key===checkpointKey)throw Error('storage denied');return normalSet(key,value)};
+ reply(first);await run('perform('+JSON.stringify(recruit)+','+JSON.stringify(preview)+')');assert.equal(storage.get(checkpointKey),checkpointBeforeFailure);assert.equal(run('game.actions.length'),1);assert.match(get('storage-warning').textContent,/NOT saved locally.*storage denied/);
+ run('render()');assert.match(get('storage-warning').textContent,/NOT saved locally/);
+ accept=false;before=fetches;reply(legacy);await get('legacy').onclick();assert.equal(fetches,before); // Memory-only progress cannot be silently lost even to read-only viewing.
+ context.localStorage.setItem=normalSet;run('checkpoint()');assert.doesNotMatch(get('storage-warning').textContent,/NOT saved locally/);
+ context.localStorage.getItem=()=>{throw Error('read denied')};before=fetches;await get('new').onclick();assert.equal(fetches,before);assert.match(get('storage-warning').textContent,/read denied/);context.localStorage.getItem=normalGet;
+ // Corrupt current checkpoint remains byte-identical and blocks replacement, including startup-like no-game state.
+ const validCheckpoint=storage.get(checkpointKey);storage.set(checkpointKey,'{corrupt');run('game=null');accept=true;before=fetches;await get('new').onclick();assert.equal(fetches,before);assert.equal(storage.get(checkpointKey),'{corrupt');
+ setGame(start);run('checkpoint()');assert.equal(storage.get(checkpointKey),'{corrupt');storage.set(checkpointKey,validCheckpoint);
+ // Failed Fe validation retains current game, selection, checkpoint and named collection.
+ setGame(first);run('checkpoint();selected=5');const beforeRejected=storage.get(checkpointKey),beforeRejectedSlots=storage.get(slotsKey);
+ get('snapshot-list').value=slots()[0].id;response={ok:false,json:async()=>({error:'Fe rejected snapshot'})};await get('snapshot-load').onclick();
+ assert.equal(run('selected'),5);assert.equal(run('game.actions.length'),1);assert.equal(storage.get(checkpointKey),beforeRejected);assert.equal(storage.get(slotsKey),beforeRejectedSlots);
+ // A delayed import owns the busy lock through reading AND validation/application.
+ let finishRead,finishResponse;get('file').files=[{size:100,text:()=>new Promise(resolve=>{finishRead=resolve})}];
+ const imported=get('file').onchange();assert.equal(run('busy'),true);assert.equal(get('snapshot-name').disabled,true);before=fetches;
+ await get('new').onclick();await get('snapshot-load').onclick();assert.equal(get('snapshot-save').onclick(),false);await get('resume').onclick();assert.equal(fetches,before);
+ response={ok:true,json:()=>new Promise(resolve=>{finishResponse=resolve})};finishRead(JSON.stringify({version:7,scenario:0,difficulty:0,actions:[]}));
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(run('busy'),true);assert.equal(fetches,before+1);await get('snapshot-load').onclick();assert.equal(fetches,before+1);
+ finishResponse(JSON.parse(JSON.stringify(start)));await imported;assert.equal(run('busy'),false);assert.equal(get('snapshot-name').disabled,false);
+ // Cancel and rejection during import release the lock without disturbing accepted data.
+ setGame(first);run('checkpoint()');const importCheckpoint=storage.get(checkpointKey);accept=false;before=fetches;
+ get('file').files=[{size:100,text:async()=>JSON.stringify({version:7,scenario:0,difficulty:0,actions:[]})}];await get('file').onchange();assert.equal(fetches,before);assert.equal(run('busy'),false);assert.equal(storage.get(checkpointKey),importCheckpoint);
+ get('file').files=[{size:100,text:async()=>'{bad'}];await get('file').onchange();assert.equal(run('busy'),false);assert.equal(storage.get(checkpointKey),importCheckpoint);
+ // Double-clicked snapshot loads make only one transport request and do not modify snapshots.
+ accept=true;reply(start);before=fetches;const loading=get('snapshot-load').onclick();await get('snapshot-load').onclick();await loading;assert.equal(fetches,before+1);assert.equal(storage.get(slotsKey),beforeRejectedSlots);
+ for(const [key,value] of frozenKeys)assert.equal(storage.get(key),value);
+ assert.match(html,/Named snapshots stay unchanged/);assert.match(html,/Resume campaign autosaves/);
+ // Startup never sends a new-game request over an existing, empty/corrupt or unreadable checkpoint.
+ for(const stored of [validCheckpoint,'{bad','',null]){
+  const bootElements=new Map(),bootGet=id=>{if(!bootElements.has(id))bootElements.set(id,element());return bootElements.get(id)};let bootFetches=0,bootWrites=0;
+  const boot=vm.createContext({document:{getElementById:bootGet,querySelectorAll:()=>[...bootElements.values()],createElement:element},localStorage:{getItem:key=>{if(stored===null)throw Error('startup denied');return key===checkpointKey?stored:null},setItem:()=>{bootWrites++}},confirm:()=>false,fetch:async()=>{bootFetches++;throw Error('Unexpected startup request')},console,setTimeout,URL,Blob});
+  vm.runInContext(html.split('<script>')[1].split('</script>')[0],boot);assert.equal(bootFetches,0);assert.equal(bootWrites,0);assert.equal(bootGet('snapshot-save').disabled,true);
+  if(stored===null)assert.match(bootGet('storage-warning').textContent,/startup denied.*Automatic startup is paused/);
+ }
+ console.log('UI unit tests passed: existing v7 rules/presentation, isolated v1..v7 checkpoints, named snapshot bounds and preservation, replacement guards, storage failures, delayed imports and repeated clicks. Mocked DOM/transport, not browser or human playtesting.');
 })().catch(e=>{console.error(e);process.exitCode=1});

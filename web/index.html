@@ -18,6 +18,13 @@
 <button id="new">New game</button><button id="save" disabled>Save replay</button><button id="load">Load replay</button><button id="resume">Resume campaign</button><button id="rivers" hidden>View v6 river replay</button><button id="rounds" hidden>View v5 campaign replay</button><button id="roles" hidden>View v4 mixed-army replay</button><button id="campaign" hidden>View v3 campaign replay</button><button id="previous" hidden>View v2 hex replay</button><button id="legacy" hidden>View v1 square replay</button>
 <input class="file" id="file" type="file" accept=".json,application/json">
 </div>
+<details id="snapshots"><summary>Named campaign snapshots</summary>
+<p>Up to six snapshots in this browser and port. Named snapshots stay unchanged until you explicitly replace them. Resume campaign autosaves your current campaign. Export replays for backups.</p>
+<div class="toolbar"><label for="snapshot-name">Name</label><input id="snapshot-name" maxlength="40" autocomplete="off"><button id="snapshot-save">Save current as new</button>
+<label for="snapshot-list">Saved snapshot</label><select id="snapshot-list"></select><button id="snapshot-load">Load selected</button><button id="snapshot-replace">Replace selected</button><button id="snapshot-delete">Delete selected</button></div>
+<p id="snapshot-status" role="status" aria-live="polite"></p>
+</details>
+<p id="storage-warning" class="error" role="alert"></p>
 <div id="notice" role="status" aria-live="polite"></div>
 <div id="human-activity" class="muted" aria-live="polite"></div><div id="activity" class="muted" aria-live="polite"></div>
 <div id="error" class="error" role="alert"></div>
@@ -49,6 +56,70 @@ const specialtyDetail=t=>t.specialty?'Specialty: '+specialtyNames[t.specialty]+'
 const names=['Neutral','Blue','Red'];
 let game=null, selected=null, busy=false, mapZoom=1;
 const CURRENT_VERSION=7, CHECKPOINT='fe-kingdoms-v7', RIVERS_CHECKPOINT='fe-kingdoms-v6', ROUNDS_CHECKPOINT='fe-kingdoms-v5', ROLES_CHECKPOINT='fe-kingdoms-v4', CAMPAIGN_CHECKPOINT='fe-kingdoms-v3', PREVIOUS_CHECKPOINT='fe-kingdoms-v2', LEGACY_CHECKPOINT='fe-kingdoms-v1';
+const SNAPSHOTS='fe-kingdoms-v7-slots-v1';
+let checkpointWarning='',snapshotWarning='';
+function storageWarning(kind,message){if(kind==='checkpoint')checkpointWarning=message;else snapshotWarning=message;$('storage-warning').textContent=[checkpointWarning,snapshotWarning].filter(Boolean).join(' ');}
+function snapshotReplay(data){
+ return !!data&&data.version===CURRENT_VERSION&&[0,1,2].includes(data.scenario)&&[0,1].includes(data.difficulty)&&Array.isArray(data.actions)&&data.actions.length<=2048&&data.actions.every(a=>Array.isArray(a)&&a.length===4&&a.every(Number.isSafeInteger));
+}
+function sameReplay(a,b){return !!a&&!!b&&a.version===b.version&&(a.scenario??0)===(b.scenario??0)&&a.difficulty===b.difficulty&&JSON.stringify(a.actions)===JSON.stringify(b.actions);}
+function readSnapshots(){
+ const raw=localStorage.getItem(SNAPSHOTS);if(raw===null)return {schema:1,slots:[]};
+ const data=JSON.parse(raw),names=new Set(),ids=new Set();
+ if(!data||data.schema!==1||!Array.isArray(data.slots)||data.slots.length>6)throw Error('Invalid or unsupported snapshot collection. Existing data was preserved.');
+ for(const s of data.slots){
+  if(!s||typeof s.id!=='string'||!s.id||ids.has(s.id)||typeof s.name!=='string'||!s.name.trim()||s.name!==s.name.trim()||s.name.length>40||names.has(s.name.toLowerCase())||typeof s.savedAt!=='string'||!Number.isFinite(Date.parse(s.savedAt))||!snapshotReplay(s.replay))throw Error('Invalid snapshot collection. Existing data was preserved.');
+  ids.add(s.id);names.add(s.name.toLowerCase());
+ }
+ return data;
+}
+function snapshotFailure(e){storageWarning('snapshot','Snapshots unavailable: '+e.message+' No snapshot changes were saved.');}
+function renderSnapshots(){
+ const list=$('snapshot-list'),selectedId=list.value;list.replaceChildren();
+ try{
+  const data=readSnapshots();
+  for(const s of data.slots){const option=document.createElement('option');option.value=s.id;option.textContent=s.name+' | '+['Small','Medium','Large'][s.replay.scenario]+' | '+(s.replay.difficulty?'Hard':'Easy')+' | '+s.replay.actions.length+' orders | '+s.savedAt;list.append(option);}
+  list.value=data.slots.some(s=>s.id===selectedId)?selectedId:(data.slots[0]?.id||'');
+  $('snapshot-status').textContent=data.slots.length+' / 6 named snapshots. Loading validates the replay with Fe.';
+ }catch(e){snapshotFailure(e);}
+}
+function changeSnapshot(kind){
+ if(busy)return false;
+ try{
+  const data=readSnapshots(),id=$('snapshot-list').value,index=data.slots.findIndex(s=>s.id===id);
+  if(kind!=='save'&&index<0)throw Error('Select a saved snapshot.');
+  if(kind!=='delete'&&(!game||readOnly()))throw Error('Load or start a current-version campaign first.');
+  if(kind==='save'){
+   const name=$('snapshot-name').value.trim();
+   if(!name||name.length>40)throw Error('Use a name of 1 to 40 characters.');
+   if(data.slots.some(s=>s.name.toLowerCase()===name.toLowerCase()))throw Error('That name already exists. Choose another name or explicitly replace the selected snapshot.');
+   if(data.slots.length===6)throw Error('All six snapshots are occupied. Export and delete one, or explicitly replace a selected snapshot.');
+   let next=1;while(data.slots.some(s=>s.id===String(next)))next++;
+   data.slots.push({id:String(next),name,savedAt:new Date().toISOString(),replay:replay()});
+  }else{
+   if(!confirm((kind==='delete'?'Delete':'Replace')+' snapshot "'+data.slots[index].name+'"? This cannot be undone.'))return false;
+   if(kind==='delete')data.slots.splice(index,1);
+   else data.slots[index]={...data.slots[index],savedAt:new Date().toISOString(),replay:replay()};
+  }
+  localStorage.setItem(SNAPSHOTS,JSON.stringify(data));storageWarning('snapshot','');renderSnapshots();
+  if(kind==='save')$('snapshot-list').value=data.slots.at(-1).id;
+  if(kind==='delete')$('snapshot-list').value='';
+  $('snapshot-status').textContent=kind==='delete'?'Snapshot deleted.':'Snapshot saved. It stays unchanged while Resume campaign autosaves your current game.';
+  return true;
+ }catch(e){snapshotFailure(e);return false;}
+}
+// Snapshot names and metadata never enter engine requests or replay exports.
+function maySwitch(target){
+ try{
+  const raw=localStorage.getItem(CHECKPOINT);let saved=null;
+  if(raw!==null){try{saved=JSON.parse(raw);if(!snapshotReplay({...saved,scenario:saved?.scenario??0}))throw Error();}catch{storageWarning('checkpoint','The current checkpoint is corrupt or unsupported. It has been preserved; replacement is blocked.');return false;}}
+  const snapshots=(()=>{try{return readSnapshots().slots;}catch(e){snapshotFailure(e);return [];}})();
+  const protectedReplay=r=>sameReplay(r,target)||snapshots.some(s=>sameReplay(s.replay,r));
+  const lostCurrent=game&&!readOnly()&&!protectedReplay(replay())&&!(target.version!==CURRENT_VERSION&&sameReplay(replay(),saved));
+  const lostSaved=target.version===CURRENT_VERSION&&saved&&!protectedReplay(saved);
+  return !(lostCurrent||lostSaved)||confirm('Replace the current campaign position? Any progress not in a named snapshot or exported replay will be lost. Cancel to save it first, or OK to discard it.');
+ }catch(e){storageWarning('checkpoint','Cannot read the campaign checkpoint: '+e.message+'. Switching is blocked; export your current replay.');return false;}
+}
 function mapInfo(){return game&&game.map||{width:5,height:3,count:15,topology:game&&game.version===1?0:1,scenario:0,blueCapital:0,redCapital:14,orderBudget:2,maxTurns:120};}
 const place=i=>String.fromCharCode(65+i%mapInfo().width)+(Math.floor(i/mapInfo().width)+1);
 const rulesLabel=v=>v===1?'square':v===2?'hex':'campaign';
@@ -156,9 +227,16 @@ function renderSearch(){
   const search=document.createElement('p');search.textContent='Configured action-ply limit: '+d.depth+'. Per-decision search nodes: '+d.nodes+'. Chosen horizon score: '+d.searchScore+'. Scores are heuristic evaluations, not win probabilities. These are immediate evaluation components under the selected priority, not a full explanation of deeper search or a promise of future orders.';detail.append(search);box.append(detail);
  }
 }
-function checkpoint(){if(readOnly())return;try{localStorage.setItem(CHECKPOINT,JSON.stringify(replay()));}catch{}}
+function checkpoint(){
+ if(readOnly())return;
+ try{
+  const raw=localStorage.getItem(CHECKPOINT);
+  if(raw!==null){const data=JSON.parse(raw);if(!snapshotReplay({...data,scenario:data?.scenario??0}))throw Error('Existing checkpoint is corrupt or unsupported and was preserved');}
+  localStorage.setItem(CHECKPOINT,JSON.stringify(replay()));storageWarning('checkpoint','');
+ }catch(e){storageWarning('checkpoint','Current progress is NOT saved locally: '+e.message+'. Export the replay before leaving.');}
+}
 function replay(){return {version:game.version,scenario:game.map?.scenario??0,difficulty:game.difficulty,actions:game.actions};}
-function setBusy(value){busy=value;document.querySelectorAll('button,select').forEach(el=>el.disabled=value);$('save').disabled=value||!game;}
+function setBusy(value){busy=value;document.querySelectorAll('button,select,input').forEach(el=>el.disabled=value);$('save').disabled=value||!game;$('snapshot-save').disabled=$('snapshot-replace').disabled=value||!game||readOnly();}
 function actionButton(a,index){
  const p=game.previews&&game.previews[index],b=document.createElement('button');b.className=p&&p.outcome===3?'risky':'';
  const title=document.createElement('span');title.textContent=a[0]===0?'End my turn (skip '+game.state.orders+' remaining '+(game.state.orders===1?'order':'orders')+')':actionName(a)+(isDecision(a)?' | campaign decision':p&&p.orderCost!==undefined?' | '+p.orderCost+' '+(p.orderCost===1?'order':'orders'):game.version<7?' | 1 order':' | Check Fe order cost');b.append(title);
@@ -252,8 +330,8 @@ function perform(a,p){
  if(p&&p.outcome===3&&!confirm(forecast(a,p)+' Send this attack anyway?'))return Promise.resolve(false);
  return request(payload(1,[...game.actions,a]),false,{kind:'human',action:a,preview:p});
 }
-async function request(payload, resetSelection=false, feedback={}){
- if(busy)return false;setBusy(true);$('error').textContent='';$('notice').textContent=payload.mode===0&&payload.actions.length?'Red is planning its orders...':'Fe is checking your order...';
+async function request(payload, resetSelection=false, feedback={},locked=false){
+ if(busy&&!locked)return false;setBusy(true);$('error').textContent='';$('notice').textContent=payload.mode===0&&payload.actions.length?'Red is planning its orders...':'Fe is checking your order...';
  try{
   const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const data=await r.json();if(!r.ok)throw Error(data.error||'Request failed.');
@@ -274,44 +352,51 @@ async function request(payload, resetSelection=false, feedback={}){
  catch(e){$('error').textContent=e.message;$('notice').textContent='';return false;}
  finally{setBusy(false);}
 }
-function load(text){
- try{const data=JSON.parse(text);if(!data||![1,2,3,4,5,6,7].includes(data.version))throw Error('Unsupported replay version.');return request({version:data.version,scenario:data.scenario??0,mode:1,difficulty:data.difficulty,actions:data.actions},true);}
+function load(text,locked=false){
+ if(busy&&!locked)return Promise.resolve(false);
+ try{const data=JSON.parse(text);if(!data||![1,2,3,4,5,6,7].includes(data.version))throw Error('Unsupported replay version.');if(!maySwitch(data))return Promise.resolve(false);return request({version:data.version,scenario:data.scenario??0,mode:1,difficulty:data.difficulty,actions:data.actions},true,{},locked);}
  catch(e){$('error').textContent='Cannot load replay: '+e.message;return Promise.resolve(false);}
-}
-function activeCheckpoint(){
- if(game&&!readOnly())return !game.state.result&&game.actions.length>0;
- try{const previous=JSON.parse(localStorage.getItem(CHECKPOINT));return !!previous&&Array.isArray(previous.actions)&&previous.actions.length>0;}catch{return false;}
 }
 $('new').onclick=()=>{
  if(busy)return;
- if(activeCheckpoint()&&!confirm('Start a new game and replace the local checkpoint? Save a replay first if you want to keep this match.'))return;
- return request({version:CURRENT_VERSION,scenario:Number($('scenario').value),mode:1,difficulty:Number($('difficulty').value),actions:[]},true,{kind:'new'});
+ const data={version:CURRENT_VERSION,scenario:Number($('scenario').value),mode:1,difficulty:Number($('difficulty').value),actions:[]};
+ if(!maySwitch(data))return;
+ return request(data,true,{kind:'new'});
 };
 $('save').onclick=()=>{if(!game)return;const url=URL.createObjectURL(new Blob([JSON.stringify(replay(),null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='fe-kingdoms-replay.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-$('load').onclick=()=>$('file').click();
+$('load').onclick=()=>{if(!busy)$('file').click();};
 $('file').onchange=async()=>{
  const file=$('file').files[0];$('file').value='';if(!file||busy)return;
  if(file.size>262144){$('error').textContent='Replay file is too large.';return;}
  setBusy(true);
- try{const text=await file.text();setBusy(false);await load(text);}
+ try{const text=await file.text();await load(text,true);}
  catch(e){$('error').textContent='Cannot read replay: '+e.message;}
  finally{setBusy(false);}
 };
-$('resume').onclick=()=>{try{const text=localStorage.getItem(CHECKPOINT);if(!text)throw Error('No saved game in this browser.');return load(text);}catch(e){$('error').textContent=e.message;}};
-$('rivers').onclick=()=>{try{const text=localStorage.getItem(RIVERS_CHECKPOINT);if(!text)throw Error('No previous v6 river replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
-$('rounds').onclick=()=>{try{const text=localStorage.getItem(ROUNDS_CHECKPOINT);if(!text)throw Error('No previous v5 campaign replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
-$('roles').onclick=()=>{try{const text=localStorage.getItem(ROLES_CHECKPOINT);if(!text)throw Error('No previous mixed-army replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
-$('campaign').onclick=()=>{try{const text=localStorage.getItem(CAMPAIGN_CHECKPOINT);if(!text)throw Error('No previous campaign replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
-$('previous').onclick=()=>{try{const text=localStorage.getItem(PREVIOUS_CHECKPOINT);if(!text)throw Error('No previous hex replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
-$('legacy').onclick=()=>{try{const text=localStorage.getItem(LEGACY_CHECKPOINT);if(!text)throw Error('No old square replay found.');return load(text);}catch(e){$('error').textContent=e.message;}};
-let saved=false,oldSaved=false,previousSaved=false,campaignSaved=false,rolesSaved=false,roundsSaved=false,riversSaved=false;try{saved=!!localStorage.getItem(CHECKPOINT);riversSaved=!!localStorage.getItem(RIVERS_CHECKPOINT);roundsSaved=!!localStorage.getItem(ROUNDS_CHECKPOINT);rolesSaved=!!localStorage.getItem(ROLES_CHECKPOINT);oldSaved=!!localStorage.getItem(LEGACY_CHECKPOINT);previousSaved=!!localStorage.getItem(PREVIOUS_CHECKPOINT);campaignSaved=!!localStorage.getItem(CAMPAIGN_CHECKPOINT);}catch{}
+function loadCheckpoint(key){
+ if(busy)return Promise.resolve(false);
+ try{const text=localStorage.getItem(key);if(text===null){$('error').textContent='No saved replay found in this browser.';return Promise.resolve(false);}return load(text);}
+ catch(e){storageWarning('checkpoint','Cannot read saved replay: '+e.message+'. Existing data was preserved.');return Promise.resolve(false);}
+}
+for(const [id,key] of [['resume',CHECKPOINT],['rivers',RIVERS_CHECKPOINT],['rounds',ROUNDS_CHECKPOINT],['roles',ROLES_CHECKPOINT],['campaign',CAMPAIGN_CHECKPOINT],['previous',PREVIOUS_CHECKPOINT],['legacy',LEGACY_CHECKPOINT]])$(id).onclick=()=>loadCheckpoint(key);
+$('snapshot-save').onclick=()=>changeSnapshot('save');
+$('snapshot-replace').onclick=()=>changeSnapshot('replace');
+$('snapshot-delete').onclick=()=>changeSnapshot('delete');
+$('snapshot-load').onclick=()=>{
+ if(busy)return Promise.resolve(false);
+ try{const slot=readSnapshots().slots.find(s=>s.id===$('snapshot-list').value);if(!slot)throw Error('Select a saved snapshot.');return load(JSON.stringify(slot.replay));}
+ catch(e){snapshotFailure(e);return Promise.resolve(false);}
+};
+renderSnapshots();
+let saved=false,storageReadable=true,oldSaved=false,previousSaved=false,campaignSaved=false,rolesSaved=false,roundsSaved=false,riversSaved=false;try{saved=localStorage.getItem(CHECKPOINT)!==null;riversSaved=!!localStorage.getItem(RIVERS_CHECKPOINT);roundsSaved=!!localStorage.getItem(ROUNDS_CHECKPOINT);rolesSaved=!!localStorage.getItem(ROLES_CHECKPOINT);oldSaved=!!localStorage.getItem(LEGACY_CHECKPOINT);previousSaved=!!localStorage.getItem(PREVIOUS_CHECKPOINT);campaignSaved=!!localStorage.getItem(CAMPAIGN_CHECKPOINT);}catch(e){storageReadable=false;storageWarning('checkpoint','Cannot read browser storage: '+e.message+'. Automatic startup is paused to preserve existing data.');}
 $('rivers').hidden=!riversSaved;
 $('rounds').hidden=!roundsSaved;
 $('roles').hidden=!rolesSaved;
 $('campaign').hidden=!campaignSaved;
 $('previous').hidden=!previousSaved;
 $('legacy').hidden=!oldSaved;
+setBusy(false);
 if(saved){$('notice').textContent='A local checkpoint is available. Resume it or start a new game.';}
-else request({version:CURRENT_VERSION,scenario:0,mode:1,difficulty:0,actions:[]},true,{kind:'new'});
+else if(storageReadable)request({version:CURRENT_VERSION,scenario:0,mode:1,difficulty:0,actions:[]},true,{kind:'new'});
 </script>
 </html>

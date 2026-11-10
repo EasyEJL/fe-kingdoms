@@ -2,9 +2,9 @@
 
 A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current local preview is **rules version 7: frontier development**. The browser and Python adapter only display and transport Fe results.
 
-## Isolated frontier development
+## Isolated save-management development
 
-The four v7 feature stages are implemented and the automated suite passes. This is a local preview, not a published release; fresh browser and human validation remain outstanding. The frontier-expansion branch is developed in `C:\Users\Eric\dev\fe-kingdoms-frontiers` with its separate preview reserved at http://localhost:8768. It does not replace the active game on ports 8765, 8766 and 8767. Run `scripts/preview.ps1` from this checkout to start or locate that separate preview. Do not use the ordinary launcher to switch the live game during a match.
+The four v7 feature stages are implemented and the automated suite passes. This is a local preview, not a published release; fresh browser and human validation remain outstanding. This campaign-saves branch extends the validated v7 engine with local save management in `C:\Users\Eric\dev\fe-kingdoms-saves`. Its separate preview is reserved at http://localhost:8769. It does not replace active games on ports 8765, 8766, 8767 or 8768. Run `scripts/preview.ps1` from this checkout to start or locate that separate preview. Do not use the ordinary launcher to switch the live game during a match.
 
 Browser saves are separate for each port. To copy a current game into the preview, use **Save replay** in the original game and **Load replay** in the preview. The original checkpoint remains untouched. New games use v7. Existing v1-v6 matches remain exact read-only replays; they are never silently converted.
 
@@ -13,7 +13,7 @@ Browser saves are separate for each port. To copy a current game into the previe
 From PowerShell, with Docker Desktop running and the existing pinned toolchain image available:
 
 ```powershell
-Set-Location C:\Users\Eric\dev\fe-kingdoms-frontiers
+Set-Location C:\Users\Eric\dev\fe-kingdoms-saves
 .\scripts\preview.ps1
 ```
 
@@ -50,6 +50,14 @@ On the small map, move five troops from A1 to B1, then seven from B1 to the fore
 ## Saves and compatibility
 
 Save replay exports the accepted action sequence, version, scenario and difficulty. Up to 2,048 actions are supported, including campaign decisions. At capacity, play pauses for export without declaring a draw; export does not itself increase this version's capacity. Fe validates every recorded action when loading. Version-1 square saves, version-2 basic-hex saves, version-3 infantry-campaign saves and version-4 mixed-army saves, version-5 continuation saves and version-6 river saves load through frozen engines **read-only**. They are never silently migrated. Each rules version has a separate browser checkpoint; loading an old replay does not replace the current one. Export replays to keep multiple games.
+
+### Named campaign snapshots
+
+Open **Named campaign snapshots**, enter a name and choose **Save current as new**. Keep up to six current-version snapshots. To pause a large game, save a named snapshot, start the shorter game, then choose the stored large snapshot and **Load selected** when ready.
+
+Named snapshots are manual restore points: they do not change as you continue playing. **Resume campaign** still restores the one current autosave. Use **Replace selected** to update a named snapshot deliberately. Replacing or deleting asks for confirmation, and switching away from progress not held in a named snapshot warns before discarding it. Legacy replays remain read-only and exportable.
+
+Storage failures stay visible. Export replays for durable backups and to move games between browser profiles or preview ports. This feature does not sync to a server or alter Fe rules.
 
 ## Current verification and balance limits
 

@@ -43,3 +43,5 @@ Add an ADR for a meaningful architectural or rules decision, not every implement
 
 - [V7 Sol playtest and replays](playtests/2026-11-10-v7.md): two bounded model-versus-Fe campaigns, forecast audits and limitations.
 - [Development-map study](experiments/development-map.md): measured existing-map development openings and a proposed, unimplemented larger-map experiment.
+
+- [ADR 0015: Explicit named campaign snapshots](adr/0015-named-campaign-snapshots.md).
