@@ -10,6 +10,10 @@ The Fe Kingdoms logo and DragonsTales name and medallion are project branding, e
 
 An isolated localhost browser preview was inspected at the default desktop viewport and at 390 x 844 CSS pixels. The logo and readable text heading appeared without obstructing the toolbar at both widths; the viewport was reset afterward. This was a targeted layout check, not a human playtest. The full `scripts/verify.ps1` aggregate passed in the isolated copy, including a real HTTP test of the exact PNG bytes, dimensions, content type and rejected traversal path. UI unit tests are mocked and do not replace a browser or human playtest. The existing Linux preview archive predates this logo integration and has not been rebuilt.
 
-GitHub documentation references use paths relative to each document. The game header masks the logo’s outer glow with CSS; GitHub Markdown displays the original PNG without that game-specific mask. The four manga storyboards in the companion are text placeholders, not existing approved panels.
+GitHub documentation references use paths relative to each document. The game header masks the logo’s outer glow with CSS; GitHub Markdown displays the original PNG without that game-specific mask. The opening manga panel is approved and included; the other three storyboards remain text placeholders.
 
 On 2026-11-16, a case-sensitive path audit checked every Markdown and HTML image reference in the isolated review copy, and a local browser image-tag preview loaded the crest and medallion from their document-relative paths. This was not a GitHub rendering or human playtest. The original approved game logo and studio medallion were visually inspected; the full offline project verification also passed in that copy.
+
+## Approved opening manga panel, 2026-11-17
+
+`docs/assets/fek-manga-01-bread-departs.png` is the original AI-generated opening panel approved by Eric and saved by him to Downloads. It is copied without modification (1536 x 1024 PNG, 3,750,261 bytes). SHA-256: `646442dbdc96840ec61b4995cb9f228571bc46a9d40f5488ddeb3c5c3201f4a1`. Its source Library filename was `fek-manga-01-bread-departs-draft.png`. Visual inspection confirmed the crowned blue castle, departing bread and approved caption. The copy hash matches the supplied original.

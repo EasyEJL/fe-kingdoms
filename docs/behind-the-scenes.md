@@ -4,7 +4,7 @@
 
 <img src="../web/assets/fe-kingdoms-logo.png" alt="Fe Kingdoms crest with opposing castles and a green hex path" width="240">
 
-> **Storyboard panel 1 — opening (provisional):** A tiny crowned castle surveys a hex map. Caption: “I shall conquer everything.” The bread supply quietly leaves the room.
+![A crowned blue castle announces its ambition while a worried loaf carries its belongings away across a hex-map kingdom.](assets/fek-manga-01-bread-departs.png)
 
 ## About DragonsTales
 
