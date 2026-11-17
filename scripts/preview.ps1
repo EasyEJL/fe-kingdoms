@@ -1,9 +1,10 @@
 # Isolated local visual preview. Does not stop or replace the main game.
+param([string]$Image = '')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $port = 8770
 $name = 'fe-kingdoms-charters'
-$image = (Get-Content (Join-Path $root 'toolchain.lock.json') | ConvertFrom-Json).measured_image_id
+if (-not $Image) { $Image = (Get-Content (Join-Path $root 'toolchain.lock.json') | ConvertFrom-Json).measured_image_id }
 $running = & docker ps --filter "name=^/$name`$" --format '{{.ID}}'
 if ($LASTEXITCODE -ne 0) { throw 'Docker is unavailable.' }
 if ($running) {
@@ -13,7 +14,9 @@ if ($running) {
     exit 0
 }
 if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) { throw "Port $port is in use; no existing process was stopped." }
-& docker run --rm --pull never --network none -v "${root}:/work" -w /work $image python3 scripts/build.py
+& docker run --rm --pull never --network none -v "${root}:/work:ro" -w /work $Image python3 scripts/check_toolchain.py
+if ($LASTEXITCODE -ne 0) { throw 'Toolchain validation failed.' }
+& docker run --rm --pull never --network none -v "${root}:/work" -w /work $Image python3 scripts/build.py
 if ($LASTEXITCODE -ne 0) { throw 'Fe preview build failed.' }
 Write-Host "Open http://localhost:$port. This origin has separate browser saves from ports 8765, 8766, 8767, 8768 and 8769."
 Write-Host 'Use Save replay in the original game, then Load replay here to copy a match. No automatic transfer is performed.'

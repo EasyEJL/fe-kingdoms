@@ -1,19 +1,35 @@
 # Fe Kingdoms
 
+<img src="web/assets/fe-kingdoms-logo.png" alt="Fe Kingdoms crest with blue and red castles and a green hex path" width="240">
+
 A local, browser-playable kingdom-conquest game with authoritative native Fe rules and computer play. The current local preview is **rules version 8: kingdom development**. The browser and Python adapter only display and transport Fe results.
 
-## Isolated kingdom-development experiment
+For a more playful tour, see the [behind-the-scenes companion](docs/behind-the-scenes.md).
 
-The reviewed v7 save/practice milestone remains unchanged on port 8769. This kingdom-charters branch is developed in `C:\Users\Eric\dev\fe-kingdoms-charters`, with its isolated preview at http://localhost:8770. V8 rules and prices are preserved for replay; later physical changes require a new version. It does not replace active games on ports 8765 through 8769. Run `launch.ps1` or `scripts/preview.ps1` from this checkout to start or locate that separate preview. Both use only port 8770 and leave older servers running.
+## Current preview and replay compatibility
+
+The reviewed v7 save/practice milestone remains unchanged on port 8769. The Windows preview uses http://localhost:8770. V8 rules and prices are preserved for replay; later physical changes require a new version. It does not replace active games on ports 8765 through 8769. Run `launch.ps1` or `scripts/preview.ps1` from this checkout to start or locate that separate preview. Both use only port 8770 and leave older servers running.
 
 Browser saves are separate for each port. To copy a current game into the preview, use **Save replay** in the original game and **Load replay** in the preview. The original checkpoint remains untouched. New games use v8. Existing v1-v7 matches remain exact read-only replays; they are never silently converted.
+
+## Reproduce on a fresh machine
+
+With Docker running, prepare the toolchain image from the recorded base and the checksum-verified Fe 26.5.0 compiler (this setup downloads dependencies):
+
+```powershell
+docker build --platform linux/amd64 -f Dockerfile.toolchain -t fe-kingdoms-toolchain:26.5.0 .
+.\scripts\verify.ps1 -Image fe-kingdoms-toolchain:26.5.0
+.\scripts\preview.ps1 -Image fe-kingdoms-toolchain:26.5.0
+```
+
+The actual build and tests run offline. Node is required for the UI unit tests. For Linux/macOS commands, architecture limits, the generated Fe ingot and validation evidence, see [reproducibility](docs/reproducibility.md). Independent clean-machine and human-browser checks remain outstanding.
 
 ## Play and verify
 
 From PowerShell, with Docker Desktop running and the existing pinned toolchain image available:
 
 ```powershell
-Set-Location C:\Users\Eric\dev\fe-kingdoms-charters
+# From your cloned repository directory
 .\scripts\preview.ps1
 ```
 
@@ -96,4 +112,8 @@ Eric playtested the original square game and the large-map visual v4 preview. He
 - `server.py` and `web/index.html`: thin transport and presentation.
 - `legacy/`: frozen engines for older read-only replays.
 
-Uses native Fe 26.5.0 (3dab95f), with compiler bytes verified by `scripts/build.py`. The pinned image and compiler hash are recorded in `toolchain.lock.json`. No toolchain download, external engine, LLM opponent, contract deployment or terminal UI is involved. Prior transition-lab and Dragonstales projects remain separate. No remote, push, public deployment, registration or licensing election has been performed.
+Uses native Fe 26.5.0 (3dab95f), with compiler bytes verified by `scripts/build.py`. The pinned image and compiler hash are recorded in `toolchain.lock.json`. The local pinned-image path needs no download; fresh setup downloads the toolchain. No external game engine, LLM opponent, contract deployment or terminal UI is involved. Prior transition-lab and Dragonstales projects remain separate. No remote, push or public deployment has been performed; the game code is MIT-licensed under Eric Lizotte.
+
+## License
+
+The game code is provided under the [MIT License](LICENSE). The Fe Kingdoms logo, DragonsTales name and studio medallion are excluded from the code license; verify other assets and reused materials before publication.

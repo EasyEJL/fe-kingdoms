@@ -1,0 +1,9 @@
+# Setup requires network access; all project builds and tests run with --network none.
+# The compiler hash and base digest are recorded in toolchain.lock.json.
+FROM --platform=linux/amd64 rust@sha256:cf09adf8c3ebaba10779e5c23ff7fe4df4cccdab8a91f199b0c142c53fef3e1a
+RUN apt-get update && apt-get install -y --no-install-recommends python3 time ca-certificates curl && rm -rf /var/lib/apt/lists/*
+RUN rustup toolchain install 1.94.0 --profile minimal && rustup default 1.94.0
+RUN curl -fL --retry 3 -o /usr/local/bin/fe https://github.com/argotorg/fe/releases/download/v26.5.0/fe_linux_amd64 \
+    && echo '3732fbe8a6e9d2ea3925d02d0e3a1478bc1e01d742c2be75d3ea7300c46c45f0  /usr/local/bin/fe' | sha256sum -c - \
+    && chmod 755 /usr/local/bin/fe && fe --version && rustc --version
+WORKDIR /work

@@ -38,7 +38,7 @@ def compile_oracle():
     (ROOT / 'generated').mkdir(exist_ok=True)
     (ROOT / 'out').mkdir(exist_ok=True)
     (ROOT / 'generated/tactics.fe').write_text(engine + '\n' + io + '\n' + oracle)
-    subprocess.run(['fe', 'build', '--backend', 'native', '-O', '1', '--emit',
+    subprocess.run(['fe', 'build', '--standalone', '--backend', 'native', '-O', '1', '--emit',
                     'executable', '--out-dir', 'out', 'generated/tactics.fe'],
                    cwd=ROOT, check=True, timeout=60)
 

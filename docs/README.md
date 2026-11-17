@@ -2,6 +2,8 @@
 
 These documents explain the current project and the reasons behind it. They were first recorded on 2026-11-09, after the playable prototype and first playtest revision existed. They are not a complete contemporaneous history of that earlier work.
 
+- [Behind-the-scenes companion](behind-the-scenes.md): the story, the Fe engine and provisional manga storyboards.
+- [Visual assets and provenance](visual-assets.md).
 - [Development workflow](development.md): local Git, launch, tests, files and review boundaries.
 - [Validation baseline](validation.md): what was checked and what still needs playtesting.
 - [Development history](history.md): a short reconstructed pre-Git summary.

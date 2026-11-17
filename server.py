@@ -175,6 +175,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(403, {'error': 'Only same-origin localhost requests are accepted.'})
         if self.path in ('/', '/index.html'):
             return self.send_bytes(200, (ROOT / 'web' / 'index.html').read_bytes(), 'text/html; charset=utf-8')
+        if self.path == '/assets/fe-kingdoms-logo.png':
+            return self.send_bytes(200, (ROOT / 'web' / 'assets' / 'fe-kingdoms-logo.png').read_bytes(), 'image/png')
         self.send_json(404, {'error': 'Not found.'})
 
     def do_POST(self):

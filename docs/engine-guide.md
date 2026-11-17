@@ -112,7 +112,7 @@ The parser in `src/native.fe` rejects malformed numbers, overflow, extra fields,
 
 The host routes versions 1 through 6 to frozen read-only replay executables, so old actions are not silently given new movement or economy semantics.
 
-`scripts/build.py` verifies the compiler hash, concatenates unchanged Fe source and calls `fe build --backend native`. It does not translate host-language game logic. `scripts/test_fe.py` combines the engine and `src/tests.fe` and runs native Fe tests. Broader verification adds transport, replay, full matches and UI units.
+`scripts/build.py` verifies the compiler hash, copies `fe.toml` into a generated ingot, concatenates unchanged Fe source and calls `fe build --backend native` on that ingot. Frozen engines use standalone builds. It does not translate host-language game logic. `scripts/test_fe.py` combines the engine and `src/tests.fe` and runs native Fe tests. Broader verification adds transport, replay, full matches and UI units.
 
 Read these tests first:
 

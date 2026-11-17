@@ -1,4 +1,6 @@
 import json
+import hashlib
+import struct
 import unittest
 import sys
 from pathlib import Path
@@ -66,6 +68,19 @@ class AdapterTests(unittest.TestCase):
             response = connection.getresponse()
             self.assertEqual(response.status, 200)
             self.assertIn(b'Fe Kingdoms', response.read())
+            connection.request('GET', '/assets/fe-kingdoms-logo.png')
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.getheader('Content-Type'), 'image/png')
+            image = response.read()
+            self.assertEqual(image, (Path(__file__).resolve().parents[1] / 'web/assets/fe-kingdoms-logo.png').read_bytes())
+            self.assertEqual(hashlib.sha256(image).hexdigest(), '005ec6b3b4c995ce26e73bda6c162248179781eedbbbb4934ab0149ab1ae492f')
+            self.assertEqual(image[:8], b'\x89PNG\r\n\x1a\n')
+            self.assertEqual(struct.unpack('>II', image[16:24]), (1536, 1024))
+            connection.request('GET', '/assets/../server.py')
+            response = connection.getresponse()
+            self.assertEqual(response.status, 404)
+            response.read()
             connection.request('POST', '/api/game', body='{}', headers={'Content-Type': 'application/json', 'Origin': 'https://malicious.example'})
             response = connection.getresponse()
             self.assertEqual(response.status, 403)
