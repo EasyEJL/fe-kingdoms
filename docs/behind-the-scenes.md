@@ -24,7 +24,7 @@ The documented history describes a pivot from a differential-testing investigati
 
 Blue and Red contest a bounded hex map with capitals, territory, settlements, supply, food, forts and mixed troops. V8 adds permanent kingdom knowledge supported by supplied towns. You can save action replays, use named local snapshots and try prepared practice positions. Older rules versions replay through frozen engines. The current baseline retains the simpler A opponent; an investment-valuation experiment exists separately and was not shown to improve play. [V8 decision](adr/0018-retain-baseline-opponent.md)
 
-> **Storyboard panel 2 — logistics (provisional):** A loaf and coin stare at a broken road to their capital. Caption: “We appear to have been strategically inconvenienced.”
+![A worried loaf and coin face a broken supply road: We appear to have been strategically inconvenienced.](assets/fek-manga-02-logistics.png)
 
 ## How it works
 
@@ -34,7 +34,7 @@ Supply is a breadth-first traversal through owned, passable tiles from the capit
 
 The native protocol accepts a versioned action trace, validates it and reconstructs the state. The Python server serializes requests and responses; the browser presents Fe's results and manages local saves. See [protocol](protocol.md), `src/engine.fe` (`legal`, `apply`, `supply`, `search_focused_cached`, `decide`) and `src/native.fe`. The older [engine guide](engine-guide.md) is valuable but its v6/v7 examples should not be mistaken for current v8 instructions.
 
-> **Storyboard panel 3 — the opponent (provisional):** Red and Blue tokens contemplate branching arrows. Caption: “Four plies later, the bread remains unconvinced.”
+![Red and Blue contemplate branching choices: Four plies later, the bread remains unconvinced.](assets/fek-manga-03-opponent.png)
 
 ## How to try it
 
@@ -44,11 +44,11 @@ Follow the short [README](../README.md) for the pinned-image prerequisites, prev
 
 Visible turn handoff matters. Round limits should not silently end an interesting fight. Search is expensive enough to require explicit bounds, and a plausible evaluation change is not evidence of a stronger opponent. In the documented v8 comparison, neither policy researched; the retained A baseline is a cautious choice, not a universal strength ranking. The complete v8 HTTP match also contained no research orders. An agent-driven browser check exercised a short v8 turn and replay; a fresh human v8 playtest, independent clean-machine reproduction and the submission handoff remain outstanding. [Validation](validation.md) · [A/B report](playtests/v8-ab-results.md)
 
-> **Storyboard panel 4 — closing (provisional):** A small flag and an exhausted quill sit beside notes. Caption: “The kingdom survives. The documentation demands another turn.”
+![An exhausted quill faces paperwork: The kingdom survives. The documentation demands another turn.](assets/fek-manga-04-closing.png)
 
 ## Credits / tools / assets
 
-Fe 26.5.0 supplies the native compiler; Docker runs the pinned toolchain; Python serves and transports; browser HTML/JavaScript presents the game. AI assistance was used in development and documentation; the responsible human should complete the precise scope and review before public release. The studio medallion and the approved Fe Kingdoms crest are included as project branding; see [visual assets](visual-assets.md) for provenance and licensing. Storyboards above are text placeholders, not commissioned or approved character designs. Confirm provenance and redistribution rights for all assets and reused material before publication.
+Fe 26.5.0 supplies the native compiler; Docker runs the pinned toolchain; Python serves and transports; browser HTML/JavaScript presents the game. AI assistance was used in development and documentation; the responsible human should complete the precise scope and review before public release. The studio medallion and the approved Fe Kingdoms crest are included as project branding; see [visual assets](visual-assets.md) for provenance and licensing. The four manga illustrations were AI-generated for this project and approved by Eric for publication. They are illustrative commentary, not gameplay screenshots; see the visual-assets record for their source and hashes.
 
 ## Stuff we had to include
 
