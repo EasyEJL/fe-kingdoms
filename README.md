@@ -112,7 +112,7 @@ Eric playtested the original square game and the large-map visual v4 preview. He
 - `server.py` and `web/index.html`: thin transport and presentation.
 - `legacy/`: frozen engines for older read-only replays.
 
-Uses native Fe 26.5.0 (3dab95f), with compiler bytes verified by `scripts/build.py`. The pinned image and compiler hash are recorded in `toolchain.lock.json`. The local pinned-image path needs no download; fresh setup downloads the toolchain. No external game engine, LLM opponent, contract deployment or terminal UI is involved. Prior transition-lab and Dragonstales projects remain separate. No remote, push or public deployment has been performed; the game code is MIT-licensed under Eric Lizotte.
+Uses native Fe 26.5.0 (3dab95f), with compiler bytes verified by `scripts/build.py`. The pinned image and compiler hash are recorded in `toolchain.lock.json`. The local pinned-image path needs no download; fresh setup downloads the toolchain. No external game engine, LLM opponent, contract deployment or terminal UI is involved. Prior transition-lab and Dragonstales projects remain separate. The source repository is public on GitHub; the game runs locally and is not deployed as a hosted app. The game code is MIT-licensed under Eric Lizotte.
 
 ## License
 
